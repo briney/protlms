@@ -27,7 +27,7 @@ print(plms.__version__)
 pytest                       # run the test suite
 ruff check src/ tests/       # lint
 ruff format src/ tests/      # format
-mypy src/                    # type check
+ty check src/                # type check
 ```
 
 All tooling is configured in `pyproject.toml` — there are no separate config files.

@@ -32,7 +32,7 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "ruff>=0.4",
-    "mypy>=1.0",
+    "ty>=0.0.40",
     "pre-commit>=3.0",
 ]
 
@@ -71,11 +71,9 @@ known-first-party = ["plms"]
 testpaths = ["tests"]
 addopts = "-ra -q"
 
-[tool.mypy]
-python_version = "3.11"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
+[tool.ty.environment]
+# ty infers the Python version from `requires-python`; set explicitly for clarity.
+python-version = "3.11"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/plms"]

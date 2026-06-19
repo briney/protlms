@@ -33,7 +33,7 @@ jobs:
         run: ruff format --check src/ tests/
 
       - name: Type check
-        run: mypy src/
+        run: ty check src/
 
       - name: Test
         run: pytest

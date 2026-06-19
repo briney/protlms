@@ -25,7 +25,7 @@ interface, per-model backend adapters, tokenization/batching utilities, and the
 - Test: `pytest`
 - Lint: `ruff check src/ tests/`
 - Format: `ruff format src/ tests/`
-- Type check: `mypy src/`
+- Type check: `ty check src/`
 
 Always run tests and lint before considering work complete.
 
@@ -42,7 +42,7 @@ Always run tests and lint before considering work complete.
 ## What Not to Do
 
 - Do not add dependencies without explicit approval. Prefer the standard library when reasonable.
-- Do not create separate config files (`.flake8`, `pytest.ini`, `mypy.ini`, etc.). All tool config lives in `pyproject.toml`.
+- Do not create separate config files (`.flake8`, `pytest.ini`, `ty.toml`, etc.). All tool config lives in `pyproject.toml`.
 - Do not use `setup.py`, `setup.cfg`, or `requirements.txt`.
 - Do not modify CI configuration without explicit approval.
 - Do not add `# type: ignore` without a comment explaining why.

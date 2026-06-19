@@ -16,7 +16,7 @@ ruff check src/ tests/
 ruff format src/ tests/
 
 # Type check
-mypy src/
+ty check src/
 
 # CLI
 plms --help
