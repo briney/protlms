@@ -299,6 +299,7 @@ def test_score_missing_columns_raises(tmp_path: Path) -> None:
     model = _load()
     with pytest.raises(InvalidRequestError):
         model.score(bad, output_dir=tmp_path / "sc")
+    assert model._runner.last_spec is None  # type: ignore[attr-defined]
 
 
 def test_score_unsupported_capability_raises(variants_csv: Path, tmp_path: Path) -> None:

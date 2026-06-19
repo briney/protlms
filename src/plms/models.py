@@ -45,6 +45,8 @@ if TYPE_CHECKING:
 
     import numpy as np
 
+    from plms.io import FastaRecord
+
 logger = logging.getLogger(__name__)
 
 _STDERR_TAIL_LINES = 50
@@ -227,7 +229,7 @@ class Model:
                 f"unsupported pooling {pooling!r}; model supports {sorted(supported)}"
             )
 
-    def _read_records(self, fasta: str | Path) -> list:
+    def _read_records(self, fasta: str | Path) -> list[FastaRecord]:
         records = read_fasta(Path(fasta))
         if not records:
             raise InvalidRequestError(f"input FASTA {fasta} contains no records")
