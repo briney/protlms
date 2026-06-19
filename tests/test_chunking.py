@@ -95,6 +95,7 @@ def test_merge_pooled_embeddings(tmp_path: Path) -> None:
     assert art.kind == "pooled_embeddings"
     assert set(art.record_ids) == {"a", "b", "c"}
     assert art.shape == [3, 320]
+    assert art.dtype == "float32"
     # result.json round-trips
     assert Result.model_validate_json((out / "result.json").read_text()).n_output_records == 3
 

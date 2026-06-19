@@ -103,14 +103,14 @@ def _merge_pooled(pairs: list[tuple[Path, Result]], output_dir: Path) -> list[Ou
     for chunk_dir, result in pairs:
         merged.update(load_pooled_embeddings(chunk_dir, result))
     np.savez(output_dir / "embeddings.npz", **merged)
-    dim = int(next(iter(merged.values())).shape[0])
+    sample = next(iter(merged.values()))
     return [
         OutputArtifact(
             path="embeddings.npz",
             kind=ArtifactKind.POOLED_EMBEDDINGS.value,
             record_ids=list(merged),
-            shape=[len(merged), dim],
-            dtype="float32",
+            shape=[len(merged), int(sample.shape[0])],
+            dtype=str(sample.dtype),
         )
     ]
 
