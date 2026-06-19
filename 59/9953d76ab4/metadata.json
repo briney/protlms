@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "599953d76ab4",
+  "strategy": "manual-commit",
+  "branch": "feature/phase1-score-variant-scoring",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/plms/__init__.py",
+    "src/plms/models.py",
+    "tests/test_models.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/59/9953d76ab4/0/metadata.json",
+      "transcript": "/59/9953d76ab4/0/full.jsonl",
+      "content_hash": "/59/9953d76ab4/0/content_hash.txt",
+      "prompt": "/59/9953d76ab4/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 26982,
+    "cache_creation_tokens": 685532,
+    "cache_read_tokens": 37804639,
+    "output_tokens": 249201,
+    "api_call_count": 185
+  }
+}
