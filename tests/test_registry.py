@@ -55,3 +55,15 @@ def test_resolve_progen2_small() -> None:
     assert entry.image == "plms-progen2:small"
     assert entry.model_family == "progen2"
     assert registry.resolve("progen2_small") == entry
+
+
+def test_resolve_esm_c() -> None:
+    registry = Registry.load()
+    e300 = registry.resolve("esm-c-300m")
+    assert e300.image == "plms-esm-c:300m"
+    assert e300.model_family == "esm-c"
+    assert registry.resolve("esmc_300m") == e300
+    e600 = registry.resolve("esm-c-600m")
+    assert e600.image == "plms-esm-c:600m"
+    assert e600.model_family == "esm-c"
+    assert registry.resolve("esmc_600m") == e600
