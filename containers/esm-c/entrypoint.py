@@ -168,7 +168,7 @@ def pick_device(requested: str | None) -> str:
 
 
 def load_model(device: str):  # noqa: ANN201 - returns an ESMC module
-    """Load the ESM-C model for the configured checkpoint (flash-attn disabled)."""
+    """Load the ESM-C model for the configured checkpoint (flash-attn not installed)."""
     import torch
     from esm.models.esmc import ESMC
 

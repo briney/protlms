@@ -1055,4 +1055,6 @@ git commit -m "test: end-to-end ESM-C integration (embed/likelihood/score)"
 1. **Manifest dims via a checkpoint-keyed table**, not derived from the loaded model — keeps `manifest` (and thus `plms.load`) model-load-free; equally drift-proof since the checkpoint name pins the architecture.
 2. **`max_sequence_length = 2048`** chosen for the "documented constant" the spec left open (ESM2 uses 1024; ESM-C handles longer context).
 3. **Embed restricted to the final layer (`--layers -1`)** — avoids shipping unverified hidden-state-indexing code; documented in the README. Arbitrary intermediate layers are a possible future enhancement.
+
+**As-built correction (not in the embedded code above):** the released `esm==3.2.3` has no `use_flash_attn` parameter on `ESMC.from_pretrained` (it exists only on unreleased GitHub `main`), so the shipped entrypoint omits that kwarg from both `from_pretrained` calls — flash-attn is auto-disabled because the package is not installed. The code blocks above still show `use_flash_attn=False`; the shipped `containers/esm-c/entrypoint.py` is authoritative.
 ```

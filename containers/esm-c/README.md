@@ -54,4 +54,5 @@ for you (`plms embed esm-c-300m seqs.fasta -o out/`).
   sequence) and records `params.likelihood_method = "masked_marginal"`.
 - `embed` returns the **final-layer** representation; `--layers` must be `-1`
   (the client default). Other layer indices return an `InvalidInput` error.
-- flash-attn is intentionally not installed, so the SDK uses standard attention; the image runs on CPU and uses the GPU when launched with --gpus all.
+- flash-attn is intentionally not installed, so the SDK uses standard attention.
+  The image runs on CPU and uses the GPU when launched with `--gpus all`.
