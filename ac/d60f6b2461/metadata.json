@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "acd60f6b2461",
+  "strategy": "manual-commit",
+  "branch": "feature/phase1-generate-progen2",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "tests/test_integration_esm2.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ac/d60f6b2461/0/metadata.json",
+      "transcript": "/ac/d60f6b2461/0/full.jsonl",
+      "content_hash": "/ac/d60f6b2461/0/content_hash.txt",
+      "prompt": "/ac/d60f6b2461/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 31399,
+    "cache_creation_tokens": 929327,
+    "cache_read_tokens": 112727217,
+    "output_tokens": 410788,
+    "api_call_count": 333
+  }
+}
