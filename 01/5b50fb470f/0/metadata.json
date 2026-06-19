@@ -1,0 +1,160 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "015b50fb470f",
+  "session_id": "219a8c86-7380-49cf-9b7c-76eeb573e59a",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-19T16:06:49.112583273Z",
+  "branch": "feature/phase0-contract-skeleton",
+  "checkpoints_count": 3,
+  "save_step_count": 2,
+  "files_touched": [
+    "CLAUDE.md",
+    "README.md",
+    "containers/esm2/Dockerfile",
+    "containers/esm2/README.md",
+    "containers/esm2/entrypoint.py",
+    "docs/CONTRACT.md",
+    "pyproject.toml",
+    "src/plms/__init__.py",
+    "src/plms/_data/models.yaml",
+    "src/plms/cli.py",
+    "src/plms/contract.py",
+    "src/plms/exceptions.py",
+    "src/plms/io.py",
+    "src/plms/models.py",
+    "src/plms/registry.py",
+    "src/plms/runner.py",
+    "tests/data/manifest.example.json",
+    "tests/data/result.embed.example.json",
+    "tests/data/tiny.fasta",
+    "tests/test_cli.py",
+    "tests/test_contract.py",
+    "tests/test_esm2_entrypoint.py",
+    "tests/test_integration_esm2.py",
+    "tests/test_io.py",
+    "tests/test_models.py",
+    "tests/test_registry.py",
+    "tests/test_runner.py"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "9c17ec5bc4eb",
+  "token_usage": {
+    "input_tokens": 25721,
+    "cache_creation_tokens": 575041,
+    "cache_read_tokens": 21925705,
+    "output_tokens": 166257,
+    "api_call_count": 136
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01FhqMZyYLABbEaGg48sffsR",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "superpowers:brainstorming"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "9c17ec5bc4eb",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 22,
+        "end": 23,
+        "entry_ids": [
+          "c2ace41a-241e-4f2b-9647-cc95b8828aad"
+        ],
+        "tool_use_id": "toolu_01FhqMZyYLABbEaGg48sffsR"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01FhqMZyYLABbEaGg48sffsR"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: superpowers:brainstorming",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01KMUotSLSdFu1CQhocBiGWh",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "superpowers:test-driven-development"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "9c17ec5bc4eb",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 110,
+        "end": 111,
+        "entry_ids": [
+          "539d0bf6-d8df-4592-9150-274b0f75a319"
+        ],
+        "tool_use_id": "toolu_01KMUotSLSdFu1CQhocBiGWh"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01KMUotSLSdFu1CQhocBiGWh"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: superpowers:test-driven-development",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-19T16:06:49.076397836Z",
+    "agent_lines": 2995,
+    "agent_removed": 13,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 2995,
+    "total_lines_changed": 3008,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 227,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/agents/entire-search.md": 25,
+        ".claude/settings.json": 84,
+        ".codex/agents/entire-search.toml": 23,
+        ".codex/config.toml": 3,
+        ".codex/hooks.json": 52,
+        ".cursor/hooks.json": 40
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 3177,
+      "agent_lines_removed": 13
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 3222,
+      "agent_lines_removed": 13
+    }
+  ]
+}

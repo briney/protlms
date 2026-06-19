@@ -1,0 +1,542 @@
+Let's start turning this into a concrete implementation plan. The first thing we need to do is nail down the container contract spec and the plms client skeleton, then we can demo/troubleshoot this using a small ESM2 model end-to-end with a locally built image.
+
+---
+
+<task-notification>
+<task-id>a4be35075135bc78c</task-id>
+<tool-use-id>toolu_0138x17ZNiyMte7yAPo8Gc4m</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a4be35075135bc78c.output</output-file>
+<status>completed</status>
+<summary>Agent "Design Phase 0 contract + client skeleton" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Write isn't available as a deferred tool. The plan-mode instructions say I may edit the plan file, but I don't have a Write tool in my toolset (this is a read-only planning agent). I'll deliver the complete plan as my final response, which is exactly what the parent agent reads.
+
+Here is the full Phase 0 implementation plan.
+
+---
+
+# plms Phase 0 — Implementation Plan
+
+## 0. Orientation &amp; current state
+
+Current repo is a bare scaffold: `src/plms/__init__.py` (just `__version__`), `src/plms/cli.py` (Typer app with only a `version` command + `_main` callback), one placeholder test, CI matrix on 3.11/3.12 running `ruff check`, `ruff format --check`, `ty check src/`, `pytest`. The wheel target packages only `src/plms`, so `containers/` is automatically excluded — no `MANIFEST.in` or build-exclude work needed. `configs/` and `containers/` do not exist yet.
+
+Dependencies today: `typer&gt;=0.12` only. Dev: `pytest`, `ruff`, `ty`, `pre-commit`.
+
+The plan adds: a versioned contract doc, six small client modules, one ESM2 container, dependency additions, and a two-tier test suite (mocked unit tests + a docker-gated integration test).
+
+---
+
+## A. The Container Contract spec (becomes `docs/CONTRACT.md`)
+
+This is the linchpin. Write it as a human-readable spec whose schemas are mirrored exactly by the Pydantic models in `src/plms/contract.py`. The doc is versioned by a single `CONTRACT_VERSION` string.
+
+### A.1 Contract version
+
+- `CONTRACT_VERSION = "0.1"` — a `MAJOR.MINOR` string.
+- Compatibility rule (Phase 0, deliberately simple): **client and image must share the same MAJOR.** Same major + image minor `&lt;=` client minor → run. Image minor `&gt;` client minor → run with a `rich` warning (forward-compatible reads, client may not understand new fields — Pydantic ignores unknown fields by default, which we rely on). Major mismatch → hard refuse with `ContractVersionError`. Document this table explicitly in the doc.
+- Rationale: a string keeps parsing trivial; the `embed`/`likelihood`/`score`/`generate` surface is reserved up front so adding `score`/`generate` later is a minor bump, not a major one.
+
+### A.2 Internal CLI the image MUST expose
+
+The image's `ENTRYPOINT` is the contract CLI. Subcommands:
+
+```
+&lt;entry&gt; manifest
+        # prints manifest JSON to stdout, exit 0. No mounts required.
+
+&lt;entry&gt; embed      --input /in/seqs.fasta --output /out
+                   [--pooling mean|cls|none] [--layers -1] [--batch-size N] [--device cpu|cuda]
+&lt;entry&gt; likelihood --input /in/seqs.fasta --output /out
+                   [--batch-size N] [--device cpu|cuda]
+
+# RESERVED — not implemented in Phase 0, but the flags are specified so the
+# contract and client are forward-compatible:
+&lt;entry&gt; score      --input /in/variants.csv --output /out [--device ...]
+&lt;entry&gt; generate   --input /in/prompts.fasta --output /out [--num-samples N] [--temperature T]
+```
+
+Flag conventions (locked for the doc):
+- `--input` is a path **inside the container** (always under `/in`, read-only).
+- `--output` is a directory **inside the container** (always `/out`, writable).
+- `--pooling`: `mean` and `cls` produce pooled output; `none` produces per-residue output. Manifest declares which modes the model supports.
+- `--layers`: comma-separated layer indices (e.g. `-1` for last, `-1,6` for multiple). Phase 0 ESM2 supports a single layer; multi-layer is parsed but a single index is the tested path. Negative indexing allowed.
+- `--device`: `cuda` only valid when the container was launched with `--gpus`. The container decides actual placement; if `cuda` requested but unavailable, it writes a structured error (see A.6).
+
+### A.3 Manifest JSON schema → `Manifest` Pydantic model
+
+Concrete fields (extends VISION's proposed list with explicit types):
+
+```python
+class Capability(StrEnum):
+    EMBED = "embed"
+    LIKELIHOOD = "likelihood"
+    SCORE = "score"        # reserved
+    GENERATE = "generate"  # reserved
+
+class PoolingMode(StrEnum):
+    MEAN = "mean"
+    CLS = "cls"
+    NONE = "none"
+
+class Manifest(BaseModel):
+    model_config = ConfigDict(extra="ignore")  # forward-compat: tolerate new fields
+    contract_version: str                 # e.g. "0.1"
+    name: str                             # canonical model name, e.g. "esm2_t6_8M"
+    version: str                          # model/image semantic version
+    description: str
+    model_family: str                     # e.g. "esm2"
+    capabilities: list[Capability]
+    embedding_dim: int                    # e.g. 320 for esm2_t6_8M, 1280 for t33_650M
+    max_sequence_length: int              # e.g. 1024
+    pooling_modes: list[PoolingMode]      # e.g. [mean, cls, none]
+    num_layers: int                       # transformer layer count (for --layers validation)
+    min_gpu_memory_gb: float | None       # None =&gt; runs comfortably on CPU
+    default_batch_size: int
+    image_digest: str | None = None       # filled by registry/runner at runtime, not by image
+```
+
+Note: `image_digest` is awkward for the image to self-report (an image generally can't know its own digest reliably from inside). Decision: the **client** resolves the digest at run time (via `docker image inspect`) and records it in `Result`/run metadata, not the manifest. The manifest field stays present (Optional) for forward-compat but is authoritative when set. Flag this as the one place VISION's field list and reality diverge.
+
+### A.4 `result.json` schema → `Result` Pydantic model
+
+The container writes `/out/result.json` on success. The client reads it to discover what was produced (rather than globbing `/out`).
+
+```python
+class OutputArtifact(BaseModel):
+    path: str                  # relative to /out, e.g. "embeddings.npz" or "per_residue/seq1.npy"
+    kind: str                  # "pooled_embeddings" | "per_residue_embeddings" | "likelihoods_csv"
+    record_ids: list[str] | None = None   # for per-residue: which record this file is
+    shape: list[int] | None = None        # array shape if applicable
+    dtype: str | None = None               # e.g. "float32"
+
+class Result(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    contract_version: str
+    capability: Capability
+    model_name: str
+    n_input_records: int
+    n_output_records: int      # may differ if some sequences were skipped
+    artifacts: list[OutputArtifact]
+    warnings: list[str] = []   # e.g. "3 sequences truncated to max_sequence_length"
+    params: dict[str, str] = {}  # echo of pooling/layers/etc. for reproducibility
+```
+
+### A.5 I/O convention (exact filenames)
+
+- **Mounts:** `-v &lt;host_in&gt;:/in:ro` and `-v &lt;host_out&gt;:/out:rw`. Input file path passed as `/in/&lt;filename&gt;`.
+- **Input:** FASTA for `embed`/`likelihood`. (`score` reserved → CSV with columns `record_id,mutation` or `record_id,sequence`; documented but not implemented.)
+- **Embed — pooled** (`--pooling mean|cls`): single file `/out/embeddings.npz`. Keys = record IDs (sanitized), each value a `(embedding_dim,)` float32 array. `Result.artifacts` has one `pooled_embeddings` entry with `shape=[n_records, embedding_dim]` (logical shape) and the npz key list.
+- **Embed — per-residue** (`--pooling none`): one `.npy` per record under `/out/per_residue/&lt;sanitized_id&gt;.npy`, each `(L_i, embedding_dim)` float32. One `per_residue_embeddings` artifact entry per file. Document the ID-sanitization rule (replace non-`[A-Za-z0-9._-]` with `_`, dedupe collisions with `__N` suffix) because FASTA headers are messy.
+- **Likelihood — CSV:** `/out/likelihoods.csv` with header columns:
+  `record_id,seq_len,pseudo_log_likelihood,mean_pseudo_log_likelihood,pseudo_perplexity`
+  - `pseudo_log_likelihood`: sum over positions of log P(true residue | rest) under masked-marginal.
+  - `mean_pseudo_log_likelihood`: that sum / `seq_len` (length-normalized — the usually-comparable quantity).
+  - `pseudo_perplexity`: `exp(-mean_pseudo_log_likelihood)`.
+  - One artifact entry, `kind="likelihoods_csv"`.
+
+### A.6 Error contract
+
+- Exit code `0` = success and `/out/result.json` present.
+- Non-zero exit = failure. The container writes a **single JSON object to stderr** matching:
+
+```python
+class ContainerError(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    contract_version: str | None = None
+    error_type: str       # e.g. "InvalidInput" | "UnsupportedCapability" |
+                          #      "SequenceTooLong" | "DeviceUnavailable" | "InternalError"
+    message: str
+    details: dict[str, str] = {}
+```
+
+- Client behavior: on non-zero exit, attempt to parse the **last** JSON object on stderr into `ContainerError`. If parseable → raise `ContainerExecutionError` carrying the structured fields (rendered nicely via `rich`). If not parseable → raise `ContainerExecutionError` with the raw stderr tail (last ~50 lines) so a crash/segfault is still legible. Always log the full `docker run` argv and exit code first.
+
+### A.7 What CONTRACT.md contains (sections)
+
+1. Versioning &amp; compatibility table. 2. Subcommand reference (all four, reserved marked). 3. Manifest schema. 4. Result schema. 5. I/O &amp; filename conventions. 6. Error schema. 7. A worked example: `manifest` output JSON + `embed --pooling mean` producing `embeddings.npz` + `result.json` for a 3-sequence FASTA. The doc and the Pydantic models in `contract.py` are the two sides of the same coin; keep them edited together.
+
+---
+
+## B. The `plms` client skeleton (module-by-module)
+
+All modules small, single-purpose, `from __future__ import annotations`, Google docstrings, full type hints, functions under ~50 lines. Public API surface re-exported from `src/plms/__init__.py` (`load`, `Model`, key exceptions, `__version__`) — but **no business logic in `__init__.py`** per global conventions.
+
+### B.1 `src/plms/exceptions.py`
+
+Custom hierarchy (define first — everything imports from it):
+
+```python
+class PlmsError(Exception): ...                      # base
+class ModelNotFoundError(PlmsError): ...             # registry miss
+class ImageNotFoundError(PlmsError): ...             # docker image absent locally
+class ContractVersionError(PlmsError): ...           # major mismatch
+class CapabilityNotSupportedError(PlmsError): ...    # model lacks requested capability
+class InvalidRequestError(PlmsError): ...            # bad pooling mode / seq too long / etc (client-side validation)
+class RunnerError(PlmsError): ...                    # docker invocation failed (couldn't launch)
+class ContainerExecutionError(PlmsError):            # container ran but exited non-zero
+    # carries: error_type, message, details, exit_code, stderr_tail
+class OutputParseError(PlmsError): ...               # /out malformed
+class FastaError(PlmsError): ...                     # malformed FASTA input
+```
+
+### B.2 `src/plms/contract.py`
+
+All Pydantic models from section A + the constant and enums. Pure data + a couple of thin helpers:
+
+- `CONTRACT_VERSION: str = "0.1"`
+- `Capability`, `PoolingMode` (StrEnum)
+- `Manifest`, `OutputArtifact`, `Result`, `ContainerError` (BaseModel)
+- `def check_contract_compatibility(image_version: str, client_version: str = CONTRACT_VERSION) -&gt; None:` — raises `ContractVersionError` on major mismatch, returns silently otherwise (caller handles the minor-warning at a UI layer; keep this function pure, no `rich`).
+- Depends on: `pydantic`, `exceptions`. Nothing else. No I/O.
+
+### B.3 `src/plms/registry.py`
+
+Model name → image reference. **Decision: a YAML file in `configs/models.yaml`, loaded into Pydantic records**, not a hard-coded dict. Rationale: VISION's intended deps already include `pyyaml`; YAML keeps the registry human-editable (global convention: YAML/TOML for human-edited config, no JSON); and a file-backed registry is the natural seam for Phase 2 remote registries.
+
+`configs/models.yaml` (Phase 0 content):
+```yaml
+models:
+  - name: esm2-8m
+    aliases: [esm2_t6_8M]
+    image: plms-esm2:t6_8M        # local tag built from containers/esm2
+    model_family: esm2
+  - name: esm2-650m
+    aliases: [esm2_t33_650M]
+    image: plms-esm2:t33_650M
+    model_family: esm2
+```
+
+API:
+```python
+class ModelEntry(BaseModel):
+    name: str
+    aliases: list[str] = []
+    image: str
+    model_family: str
+
+class Registry:
+    @classmethod
+    def load(cls, path: Path | None = None) -&gt; "Registry": ...   # default: packaged configs/models.yaml
+    def resolve(self, name: str) -&gt; ModelEntry: ...              # name or alias -&gt; entry; raises ModelNotFoundError
+    def list_models(self) -&gt; list[ModelEntry]: ...
+```
+
+Packaging note: `configs/models.yaml` must ship in the wheel. Either move it under `src/plms/configs/` (cleanest for `importlib.resources`) or add it to hatch wheel `force-include`. **Recommend `src/plms/_data/models.yaml`** loaded via `importlib.resources.files("plms")` — keeps packaging trivial and avoids depending on cwd. Document the deviation from VISION's top-level `configs/` (top-level `configs/` is fine for repo-level config but a packaged registry needs to be inside the package). Flag this as a small VISION ambiguity.
+
+Depends on: `pydantic`, `pyyaml`, `importlib.resources`, `exceptions`.
+
+### B.4 `src/plms/runner.py`
+
+The Runner seam (locked decision #2). A `Protocol` interface + a subprocess implementation. Returns a structured result; does not parse domain outputs (that's `io.py`).
+
+```python
+@dataclass(frozen=True)
+class RunSpec:
+    image: str
+    command: list[str]                 # contract subcommand + flags, e.g. ["embed","--input","/in/x.fasta",...]
+    input_dir: Path                     # host path mounted ro at /in
+    output_dir: Path                    # host path mounted rw at /out
+    use_gpu: bool = False
+    extra_env: dict[str, str] = field(default_factory=dict)
+
+@dataclass(frozen=True)
+class RunResult:
+    exit_code: int
+    stdout: str
+    stderr: str
+    argv: list[str]                     # the exact command, for logging/tests
+
+class Runner(Protocol):
+    def run(self, spec: RunSpec) -&gt; RunResult: ...
+
+class SubprocessDockerRunner:
+    def __init__(self, docker_executable: str = "docker") -&gt; None: ...
+    def run(self, spec: RunSpec) -&gt; RunResult: ...
+    def manifest(self, image: str) -&gt; str: ...   # convenience: `docker run --rm IMAGE manifest`, returns stdout
+```
+
+`build_argv(spec)` — a module-level pure function (the testable core, kept &lt;50 lines):
+```
+[docker, "run", "--rm",
+ ("--gpus","all")?,                       # only when spec.use_gpu
+ "-v", f"{spec.input_dir}:/in:ro",
+ "-v", f"{spec.output_dir}:/out:rw",
+ (for k,v in env: "-e", f"{k}={v}"),
+ spec.image,
+ *spec.command]
+```
+
+`run()`: log argv at INFO via `logging` (global convention: stdlib logging in library code, no `print`); `subprocess.run(argv, capture_output=True, text=True, check=False)` — **never `shell=True`**, always a list (global "what not to do"). Wrap `FileNotFoundError`/`OSError` (docker missing) → `RunnerError`. Return `RunResult`. It does **not** raise on non-zero exit — the caller (`Model`) interprets exit codes + parses `ContainerError`. Keep error-parsing helper here or in `contract`; put `parse_container_error(stderr) -&gt; ContainerError | None` in `contract.py` (pure) and let `Model` call it.
+
+Depends on: `subprocess`, `logging`, `contract` (for nothing heavy — just types). No `docker-py`. The `Protocol` is what lets a `DockerSdkRunner` drop in later without touching `Model`.
+
+### B.5 `src/plms/io.py`
+
+Three concerns, all pure-ish I/O helpers:
+
+**FASTA reading — tiny in-house parser (no biopython).** A ~20-line generator; biopython is a heavy dep for a one-format need and global conventions favor stdlib when reasonable.
+```python
+@dataclass(frozen=True)
+class FastaRecord:
+    id: str          # first whitespace-delimited token of header
+    description: str # full header
+    sequence: str
+
+def read_fasta(path: Path) -&gt; list[FastaRecord]: ...    # raises FastaError on malformed input
+def write_fasta(records: Iterable[FastaRecord], path: Path) -&gt; None:  # used to stage into /in
+```
+
+**Input staging:**
+```python
+def stage_inputs(src_fasta: Path) -&gt; _StagedJob:   # context manager
+    # creates tempfile.TemporaryDirectory; copies/normalizes the FASTA into &lt;tmp&gt;/in/seqs.fasta;
+    # creates &lt;tmp&gt;/out; yields paths; cleans up on exit.
+```
+Use a `contextlib.contextmanager` or a small class with `__enter__/__exit__` (global convention: context managers for resources needing cleanup). This is also where input validation lives (empty file, duplicate IDs → sanitize/warn).
+
+**Output parsing:**
+```python
+def read_result(out_dir: Path) -&gt; Result: ...                          # parses result.json, raises OutputParseError
+def load_pooled_embeddings(out_dir: Path, result: Result) -&gt; dict[str, np.ndarray]:  # from embeddings.npz
+def load_per_residue_embeddings(out_dir: Path, result: Result) -&gt; dict[str, np.ndarray]:  # from per_residue/*.npy
+def read_likelihoods(out_dir: Path, result: Result) -&gt; list[dict[str, float|str]]:   # parse CSV via stdlib csv
+```
+Use stdlib `csv` (no pandas dependency for Phase 0 — a list of dicts or a small dataclass is enough; pandas is a heavy add the CLI doesn't need). `numpy` only here, only to `np.load` arrays — matching VISION's "numpy only to load result arrays."
+
+Depends on: `numpy`, `csv`, `tempfile`, `shutil`, `contract`, `exceptions`. No torch, no pandas, no biopython.
+
+### B.6 `src/plms/models.py` — where `plms.load(name)` lives
+
+`plms.load(name)` is a thin module-level function re-exported in `__init__.py` that returns a `Model`. The `Model` object is the user-facing unified interface: it owns a `ModelEntry`, a lazily-fetched `Manifest`, and a `Runner`.
+
+```python
+def load(name: str, *, runner: Runner | None = None,
+         registry: Registry | None = None) -&gt; Model:
+    """Resolve a model name to a ready-to-use Model (fetches &amp; validates the manifest)."""
+
+class Model:
+    def __init__(self, entry: ModelEntry, runner: Runner, manifest: Manifest) -&gt; None: ...
+
+    @property
+    def manifest(self) -&gt; Manifest: ...
+
+    def embed(self, fasta: str | Path, *, pooling: str = "mean",
+              layers: Sequence[int] = (-1,), output_dir: Path | None = None,
+              use_gpu: bool = False, batch_size: int | None = None) -&gt; EmbeddingResult: ...
+
+    def likelihood(self, fasta: str | Path, *, output_dir: Path | None = None,
+                   use_gpu: bool = False, batch_size: int | None = None) -&gt; LikelihoodResult: ...
+```
+
+`load()` flow: `Registry.resolve(name)` → `runner.manifest(entry.image)` → `Manifest.model_validate_json(stdout)` → `check_contract_compatibility(manifest.contract_version)` → construct `Model`. If image absent locally, `docker run` fails → map to `ImageNotFoundError` with a "build it from containers/esm2" hint.
+
+`embed()`/`likelihood()` flow (shared private `_run_capability` helper, &lt;50 lines):
+1. Validate capability in `manifest.capabilities` → else `CapabilityNotSupportedError`.
+2. Validate `pooling` against `manifest.pooling_modes` → else `InvalidRequestError`.
+3. `read_fasta` for record count + length pre-check against `manifest.max_sequence_length` (warn, don't fail — container truncates and reports in `Result.warnings`).
+4. `io.stage_inputs` → temp `/in` + `/out`.
+5. Build `RunSpec` (command via a small `_build_command` per capability) → `runner.run`.
+6. On non-zero exit → `parse_container_error` → raise `ContainerExecutionError`.
+7. On success → `io.read_result` + the right loader → return a result object.
+
+Result wrappers (lightweight dataclasses, give users typed access without re-reading files):
+```python
+@dataclass
+class EmbeddingResult:
+    result: Result
+    output_dir: Path
+    pooling: str
+    def pooled(self) -&gt; dict[str, np.ndarray]: ...        # lazy load
+    def per_residue(self) -&gt; dict[str, np.ndarray]: ...
+
+@dataclass
+class LikelihoodResult:
+    result: Result
+    output_dir: Path
+    def rows(self) -&gt; list[dict]: ...
+```
+
+Output-dir semantics: if `output_dir` given, results are copied out of the temp dir to it and the wrapper points there; if `None`, the wrapper holds a tempdir kept alive for the object's lifetime (document this; simplest correct behavior for Phase 0). The CLI always passes `-o`, so the persistent path is the common case.
+
+Depends on: `registry`, `runner`, `io`, `contract`, `exceptions`. This is the integration module — it's the only one that touches all the others, by design.
+
+### B.7 `src/plms/cli.py` (extend existing Typer app)
+
+Keep it thin — every command resolves args and delegates to `models.load(...).&lt;method&gt;()`, then renders with `rich`. Preserve the existing `version` command and `_main` callback.
+
+New commands:
+- `plms models list` — `Registry.load().list_models()` → `rich.table.Table` (name, aliases, family, image). A `models` sub-Typer group (`models list`, room for `models info NAME` which prints the manifest).
+- `plms embed MODEL FASTA -o OUT [--pooling mean] [--layers -1] [--gpu/--no-gpu] [--batch-size N]` → `load(MODEL).embed(...)`; print a summary (n records, output path, embedding_dim) via `rich`.
+- `plms likelihood MODEL FASTA -o OUT [--gpu/--no-gpu]` → `load(MODEL).likelihood(...)`; print summary + path to CSV.
+- Reserved `score`/`generate`: either omit entirely in Phase 0, or stub them to print "not available in Phase 0" — **recommend omitting** to avoid implying support. (CONTRACT.md still reserves them.)
+
+Error handling at CLI boundary: catch `PlmsError`, render a clean `rich` error message, `raise typer.Exit(1)`. This is the one place a broad-ish catch is acceptable (top-level entry point per global conventions). Match CLI signatures to VISION's illustrative surface (`plms embed esm2-650m seqs.fasta -o out/ --pooling mean`).
+
+Depends on: `typer`, `rich`, `models`, `registry`, `exceptions`.
+
+### B.8 `src/plms/__init__.py`
+
+Re-export public API only (no logic): `load`, `Model`, `EmbeddingResult`, `LikelihoodResult`, the exception classes, `Manifest`/`Result`/`Capability` if we want them public, `__version__`. Update `__all__`.
+
+---
+
+## C. The ESM2 container (`containers/esm2/`)
+
+Build context: `Dockerfile`, `entrypoint.py` (the contract CLI), and a small README documenting build args. Excluded from the wheel (already true since wheel only packages `src/plms`).
+
+### C.1 Library choice: HuggingFace `transformers` (`facebook/esm2_*`), not `fair-esm`
+
+Reasons: (1) HF has first-class masked-LM heads (`EsmForMaskedLM`) which gives pseudo-log-likelihood almost for free via masked-marginals, plus `EsmModel` for hidden states — both capabilities from one dependency. (2) HF model+tokenizer download is a clean, cacheable build step (`AutoModel.from_pretrained(ckpt)`), making weight-baking trivial. (3) `fair-esm` is lighter but its API for per-layer reps and PLL is more manual and its checkpoint naming differs. (4) ESM-C and ProGen2 (Phase 1) are also HF-friendly, so standardizing on `transformers` now reduces per-container divergence. The build arg maps `esm2_t6_8M` → `facebook/esm2_t6_8M_UR50D` via a small dict in the entrypoint.
+
+### C.2 Dockerfile design
+
+- Base: `pytorch/pytorch:&lt;pinned&gt;-cuda12.x-cudnn-runtime` (CUDA already present, torch pinned, works on the A6000; falls back to CPU when run without `--gpus`). Pin a digest for CI reproducibility per global Docker conventions (use tag locally, digest in CI).
+- Install: `transformers`, `numpy` (pinned). No `plms` package inside — the container is independent of the client.
+- **Build arg + baked weights** (locked decision #4, and VISION's reproducibility principle):
+  ```dockerfile
+  ARG ESM2_CHECKPOINT=esm2_t6_8M
+  ENV ESM2_CHECKPOINT=${ESM2_CHECKPOINT}
+  COPY entrypoint.py /app/entrypoint.py
+  # bake weights at build time so runtime needs no network:
+  RUN python /app/entrypoint.py _prefetch     # downloads + caches the HF checkpoint into the image
+  ENTRYPOINT ["python", "/app/entrypoint.py"]
+  ```
+  `_prefetch` is a hidden subcommand that calls `from_pretrained` to populate the HF cache layer. This bakes weights → reproducible, offline runtime (set `HF_HUB_OFFLINE=1` at runtime to enforce). Build the demo image with `--build-arg ESM2_CHECKPOINT=esm2_t6_8M`.
+
+### C.3 entrypoint.py — implements the contract
+
+A single-file argparse CLI (no typer needed inside the container; keep its deps minimal) exposing `manifest`, `embed`, `likelihood`, plus hidden `_prefetch`. Each subcommand small.
+
+- `manifest`: print a hard-coded-per-checkpoint `Manifest`-shaped JSON. `embedding_dim`/`num_layers` come from a per-checkpoint table (320/6 layers for t6_8M; 1280/33 for t33_650M) or read from `model.config`. `capabilities=["embed","likelihood"]`, `pooling_modes=["mean","cls","none"]`, `max_sequence_length=1024`, `contract_version="0.1"`.
+- `embed`:
+  - Read FASTA from `--input`. Tokenize in batches (`default_batch_size`, overridable). `model.eval()`, `torch.no_grad()` (global PyTorch conventions), `torch.amp` autocast on CUDA.
+  - Hidden states from `EsmModel(..., output_hidden_states=True)`; select `--layers` index.
+  - Pooling: `mean` → average over residue positions excluding special tokens (BOS/EOS/pad) using the attention mask. `cls` → the BOS token representation. `none` → strip special tokens, keep `(L_i, D)`.
+  - Write per A.5: pooled → `embeddings.npz` (`np.savez`); per-residue → `per_residue/&lt;id&gt;.npy`. Write `result.json`. Shape comments on tensor ops (`# (B, L, D) -&gt; (B, D)` for mean-pool).
+- `likelihood`:
+  - `EsmForMaskedLM`. Pseudo-log-likelihood via masked-marginals: for each position, mask it, run forward, take log-softmax logit of the true residue. Batch the masked variants per sequence (cap batch by `--batch-size`). Exclude special tokens from the sum.
+  - Emit `likelihoods.csv` per A.5 columns + `result.json`.
+  - Document the cost: masked-marginal PLL is O(L) forward passes per sequence — fine for tiny test seqs; note it as a perf caveat (a future fast-path could use a single unmasked forward "naive PLL").
+- Error handling: top-level try/except writes a `ContainerError` JSON to stderr and `sys.exit(1)`; map known cases (`SequenceTooLong`, `DeviceUnavailable`) explicitly.
+- Truncation: sequences &gt; `max_sequence_length` → truncate, append a `Result.warnings` note (don't hard-fail) — matches the client's warn-don't-fail pre-check.
+
+### C.4 containers/esm2/README.md
+
+Document: build commands for both checkpoints, the build arg, that weights are baked, the workhorse note (`esm2_t33_650M` standard; `esm2_t6_8M` for demo/CI), and how to run `manifest` standalone for debugging.
+
+---
+
+## D. Testing &amp; end-to-end verification
+
+Two tiers. Tier 1 (unit, mocked) runs in CI on 3.11/3.12 with **no docker, no torch**. Tier 2 (integration) is docker-gated and skipped in standard CI.
+
+### D.1 Tier 1 — unit tests (mock the Runner)
+
+A `FakeRunner` fixture implementing the `Runner` Protocol: returns canned `RunResult`s (manifest JSON on `manifest()`; writes fake `result.json` + npz/npy/csv into the `output_dir` then returns exit 0; or returns a `ContainerError` on stderr + exit 1 for error tests). This is the key seam that makes the whole client testable without docker.
+
+Test files (mirror src layout, per conventions):
+- `tests/test_contract.py` — Manifest/Result/ContainerError round-trip parse; `check_contract_compatibility` (same/minor-newer/major-mismatch → raises); unknown-field tolerance (`extra="ignore"`).
+- `tests/test_registry.py` — resolve by name and alias; `ModelNotFoundError`; `list_models`; loads packaged `models.yaml`.
+- `tests/test_runner.py` — **`build_argv` is the star**: assert exact argv for CPU vs `--gpus all`, correct `:ro`/`:rw` mounts, env flags, command passthrough. Assert `run()` raises `RunnerError` when the docker executable is missing (monkeypatch `subprocess.run` to raise `FileNotFoundError`). Assert argv is logged.
+- `tests/test_io.py` — FASTA parse (multi-record, blank lines, malformed → `FastaError`); ID sanitization + collision handling; `read_result`/`load_pooled_embeddings`/`load_per_residue_embeddings`/`read_likelihoods` against fixture files written to a tmp_path (uses real numpy, no docker).
+- `tests/test_models.py` — with `FakeRunner`: `load()` validates manifest + contract; `embed`/`likelihood` happy paths return correct wrappers; `CapabilityNotSupportedError` when capability absent; `InvalidRequestError` for bad pooling; `ContainerExecutionError` surfaces structured `error_type`/`message` on non-zero exit.
+- `tests/test_cli.py` — `CliRunner` (already used in the placeholder): `models list` renders a table; `embed`/`likelihood` invoke a patched `load` and exit 0; a raised `PlmsError` → exit code 1 with a clean message. Keep the existing two `version` tests.
+
+### D.2 Tier 2 — integration / end-to-end (docker-gated)
+
+`tests/test_integration_esm2.py`, gated:
+```python
+docker_available = shutil.which("docker") is not None and _daemon_up()
+pytestmark = [pytest.mark.slow,
+              pytest.mark.skipif(not docker_available, reason="docker not available")]
+```
+- Session-scoped fixture builds `plms-esm2:t6_8M` via `subprocess.run(["docker","build","--build-arg","ESM2_CHECKPOINT=esm2_t6_8M","-t","plms-esm2:t6_8M","containers/esm2"], check=True)` (heavy data load → session-scoped per global conventions). Optionally controlled by an env flag `PLMS_RUN_DOCKER_TESTS=1` so it never surprises CI.
+- Real `load("esm2-8m").embed(tiny_fasta, pooling="mean")` → assert `embeddings.npz` has the right keys and each vector is shape `(320,)` float32. Then `pooling="none"` → per-residue `.npy` shapes `(L_i, 320)`.
+- Real `likelihood(tiny_fasta)` → assert CSV has a row per record, `pseudo_perplexity &gt; 1`, and values are finite and consistent (e.g. a near-duplicate of a known sequence scores sanely). Per global conventions this is the required end-to-end "model runs without shape errors for a few steps + one eval" check.
+
+### D.3 Real test FASTA — `tests/data/tiny.fasta`
+
+Three short **real** protein sequences (global conventions: prefer REAL data). Suggestions, all short and well-known so values are sanity-checkable:
+- Human insulin B-chain (`FVNQHLCGSHLVEALYLVCGERGFFYTPKT`, ~30 aa),
+- A short ubiquitin fragment or the GB1 domain (~56 aa),
+- A small peptide like melittin (`GIGAVLKVLTTGLPALISWIKRKRQQ`, ~26 aa).
+
+Keep each well under 1024 residues so nothing truncates and the masked-marginal PLL stays cheap. Check the file into `tests/data/`.
+
+### D.4 Manual verification commands (put in CONTRACT.md or README)
+
+```bash
+# build the tiny demo image
+docker build --build-arg ESM2_CHECKPOINT=esm2_t6_8M -t plms-esm2:t6_8M containers/esm2
+
+# inspect the manifest directly (no plms client needed)
+docker run --rm plms-esm2:t6_8M manifest
+
+# via the client, CPU
+plms embed esm2-8m tests/data/tiny.fasta -o out/ --pooling mean
+plms likelihood esm2-8m tests/data/tiny.fasta -o out/
+
+# GPU
+plms embed esm2-8m tests/data/tiny.fasta -o out/ --pooling none --gpu
+```
+
+### D.5 Dependency additions (`pyproject.toml`)
+
+`[project].dependencies`:
+```
+typer&gt;=0.12      # existing
+pydantic&gt;=2.7
+rich&gt;=13.0
+pyyaml&gt;=6.0
+numpy&gt;=1.26
+```
+(`rich` is a transitive dep of typer but should be declared explicitly since we import it directly.) Dev deps: add `types-PyYAML` if `ty` wants stubs. No `pandas`, no `biopython`, no `docker`/`docker-py`, no torch/transformers — those last two live only in the container. Note `pydantic` brings `pydantic-core` (compiled) but it's still lightweight vs ML stacks; acceptable and matches VISION's intended dep list exactly.
+
+---
+
+## Build order &amp; sequencing (each step independently verifiable)
+
+1. **`exceptions.py` + `contract.py`** — pure, no deps on other modules. Verify with `tests/test_contract.py`. Foundation everything imports.
+2. **`io.py`** — FASTA parse + output parsing. Verify with `tests/test_io.py` using fixture files (no docker). Independently useful.
+3. **`registry.py` + `src/plms/_data/models.yaml`** — verify with `tests/test_registry.py`.
+4. **`runner.py`** — `build_argv` + `SubprocessDockerRunner`. Verify with `tests/test_runner.py` (mock `subprocess.run`). The `Runner` Protocol defined here unblocks the `FakeRunner` used everywhere downstream.
+5. **`models.py`** — wire 1–4 together. Verify with `tests/test_models.py` + `FakeRunner`. At this point the entire client is testable end-to-end **without docker or torch**.
+6. **`cli.py`** — thin layer over `models.py`. Verify with `tests/test_cli.py`.
+7. **`docs/CONTRACT.md`** — write alongside step 1 (schemas) and finalize after step 5 (it must match the implemented behavior). It's the deliverable but it co-evolves with `contract.py`.
+8. **`containers/esm2/`** (Dockerfile + entrypoint.py + README) — independent of the client; only the contract binds them. Verify standalone: `docker run --rm plms-esm2:t6_8M manifest` then run embed/likelihood by hand against a mounted dir, checking `result.json`.
+9. **`tests/test_integration_esm2.py` + `tests/data/tiny.fasta`** — the seam closes: real image + real client. Run last.
+
+This ordering means steps 1–6 are fully green in CI before any docker work, and step 8 can proceed in parallel with 1–6 since the contract (step 7's schemas) is the only shared artifact.
+
+---
+
+## Risks, sequencing concerns, and VISION ambiguities to flag
+
+- **`image_digest` in the manifest** is not reliably self-knowable from inside a container. Decision: client resolves it at runtime (`docker image inspect`) and records it in run metadata/`Result`; the manifest field stays optional. This is the one concrete divergence from VISION's field list — call it out in CONTRACT.md.
+- **Packaged registry location.** VISION shows top-level `configs/`, but a registry that ships in the wheel must live inside the package (`src/plms/_data/models.yaml`) for `importlib.resources`. Recommend the in-package location; keep top-level `configs/` for repo-level (non-packaged) config if/when needed. Minor VISION ambiguity.
+- **Masked-marginal PLL cost** is O(L) forward passes/sequence. Fine for tiny test seqs and the demo; document it and note the future fast-path. Don't let the integration test use long sequences.
+- **`--layers` multi-layer output format** is under-specified by VISION. Phase 0: support a single layer on the tested path; if multiple layers are requested for per-residue, namespace files as `per_residue/&lt;id&gt;__layer&lt;L&gt;.npy`. Document and keep the multi-layer path lightly tested.
+- **No-`--gpus` CPU correctness.** The pytorch base image must run on CPU when launched without `--gpus`. Ensure entrypoint's `--device` defaults to `cuda if torch.cuda.is_available() else cpu` and the client only passes `cuda` when `use_gpu=True`. Test the CPU path in CI-like conditions (the integration test should run CPU by default; GPU is an extra assertion on the A6000).
+- **Contract/`contract.py` drift** is the central maintenance risk — the doc and the Pydantic models are two encodings of one spec. Mitigation: a CONTRACT.md "worked example" JSON that's also loaded as a fixture in `tests/test_contract.py`, so a doc/code mismatch fails a test.
+- **`docker build` time in integration tests** (pulling the pytorch base + baking weights) can be minutes on first run. Gate behind `@pytest.mark.slow` + an env flag, session-scope the build, and never run it in the standard CI matrix.
+- **Plan-file note:** I was unable to write the plan file (`/home/briney/.claude/plans/...`) — no Write tool is available to this read-only planning agent. The full plan is delivered here in this response for the parent agent to consume or persist.
+
+### Critical Files for Implementation
+- /home/briney/git/plms/src/plms/contract.py (new — Pydantic models + CONTRACT_VERSION; the spec made executable)
+- /home/briney/git/plms/src/plms/runner.py (new — Runner Protocol + SubprocessDockerRunner + build_argv; the swappable transport seam)
+- /home/briney/git/plms/src/plms/models.py (new — `load()` + `Model` integration layer tying registry/runner/io/contract together)
+- /home/briney/git/plms/containers/esm2/entrypoint.py (new — the contract implementation: manifest/embed/likelihood)
+- /home/briney/git/plms/docs/CONTRACT.md (new — the versioned contract spec, deliverable A)</result>
+<usage><subagent_tokens>29900</subagent_tokens><tool_uses>11</tool_uses><duration_ms>212357</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bjbkyqptl</task-id>
+<tool-use-id>toolu_01TUE1YTf4rL3PRJ1js8oySu</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/bjbkyqptl.output</output-file>
+<status>completed</status>
+<summary>Background command "Build the ESM2 t6_8M demo image" completed (exit code 0)</summary>
+</task-notification>
