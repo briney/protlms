@@ -118,7 +118,9 @@ def test_score_masked_marginal_end_to_end(model: plms.Model, tmp_path: Path) -> 
 def test_score_wt_marginal_runs(model: plms.Model, tmp_path: Path) -> None:
     result = model.score(VARIANTS_CSV, method="wt-marginal", output_dir=tmp_path / "sc")
     rows = {r["variant_id"]: r for r in result.rows()}
+    assert set(rows) == {"self", "single", "double"}
     assert rows["self"]["score"] == pytest.approx(0.0, abs=1e-5)
+    assert math.isfinite(float(rows["single"]["score"]))
     assert math.isfinite(float(rows["double"]["score"]))
 
 
