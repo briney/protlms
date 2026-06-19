@@ -1,6 +1,6 @@
 # The plms Container Contract
 
-> **Contract version:** `0.1`
+> **Contract version:** `0.2`
 >
 > This document is the agreement between the `plms` client and every model
 > image. It is the *only* thing the two sides share. Its schemas are mirrored
@@ -48,13 +48,15 @@ The image's `ENTRYPOINT` is the contract CLI. It MUST expose these subcommands:
 
 <entry> likelihood --input /in/seqs.fasta --output /out
                    [--batch-size N] [--device cpu|cuda]
+
+<entry> score      --input /in/variants.csv --output /out
+                   [--method masked-marginal|wt-marginal] [--batch-size N] [--device cpu|cuda]
 ```
 
 Reserved for future contract minor versions (declared in `capabilities` when
-supported; not implemented at `0.1`):
+supported; not yet implemented):
 
 ```
-<entry> score      --input /in/variants.csv  --output /out [--device ...]
 <entry> generate   --input /in/prompts.fasta --output /out [--num-samples N] [--temperature T]
 ```
 
@@ -100,12 +102,12 @@ Emitted as JSON on stdout by the `manifest` subcommand. Mirrors
 
 ```json
 {
-  "contract_version": "0.1",
+  "contract_version": "0.2",
   "name": "esm2_t6_8M",
   "version": "1.0.0",
   "description": "ESM2 8M-parameter masked protein language model.",
   "model_family": "esm2",
-  "capabilities": ["embed", "likelihood"],
+  "capabilities": ["embed", "likelihood", "score"],
   "embedding_dim": 320,
   "max_sequence_length": 1024,
   "pooling_modes": ["mean", "cls", "none"],
@@ -123,7 +125,7 @@ Emitted as JSON on stdout by the `manifest` subcommand. Mirrors
 
 - `embed` / `likelihood`: a FASTA file at `/in/seqs.fasta`. The client
   normalizes headers so each record header is just its id token.
-- `score` (reserved): a CSV with a defined variant schema.
+- `score`: a CSV at `/in/variants.csv` with the schema described below.
 
 ### Outputs
 
@@ -136,6 +138,7 @@ than globbing the directory.
 | `embed`, pooled (`mean`/`cls`) | `embeddings.npz` — one `(embedding_dim,)` float32 array per record, keyed by record id. |
 | `embed`, per-residue (`none`) | `per_residue/<id>.npy` — one `(L, embedding_dim)` float32 array per record. |
 | `likelihood` | `likelihoods.csv` (schema below). |
+| `score` | `scores.csv` (schema below). |
 
 **Record ids** are sanitized for use as filenames / npz keys: characters
 outside `[A-Za-z0-9._-]` become `_`, and collisions are de-duplicated with a
@@ -151,6 +154,23 @@ original.
 | `pseudo_log_likelihood` | Σ over positions of log P(true residue \| rest), masked-marginal. |
 | `mean_pseudo_log_likelihood` | `pseudo_log_likelihood / seq_len` (length-normalized). |
 | `pseudo_perplexity` | `exp(-mean_pseudo_log_likelihood)`. |
+
+**`variants.csv` input columns (for `score`):**
+
+| Column | Meaning |
+|---|---|
+| `variant_id` | A unique identifier for the variant. |
+| `wt_sequence` | The wild-type reference sequence (full length). |
+| `mutant` | A mutation descriptor; 1-indexed notation `{WT}{pos}{MUT}` or colon-separated multi-mutants (`A24G:T56S`). A self-substitution (e.g. `A24A`) scores exactly 0. |
+
+**`scores.csv` output columns (for `score`):**
+
+| Column | Meaning |
+|---|---|
+| `variant_id` | From the input; allows cross-referencing. |
+| `mutant` | The mutation descriptor from the input. |
+| `n_mutations` | Number of individual mutations in the descriptor (1 for `A24G`, 2 for `A24G:T56S`). |
+| `score` | The score value; blank if the variant is invalid (WT-residue mismatch, out-of-range position, or malformed descriptor). See `result.warnings`. |
 
 ---
 
@@ -175,16 +195,16 @@ The success summary written to `/out/result.json`. Mirrors
 | Field | Type | Notes |
 |---|---|---|
 | `path` | string | Relative to `/out`. |
-| `kind` | string | `pooled_embeddings`, `per_residue_embeddings`, or `likelihoods_csv` (free string for forward compatibility). |
+| `kind` | string | `pooled_embeddings`, `per_residue_embeddings`, `likelihoods_csv`, or `variant_scores_csv` (free string for forward compatibility). |
 | `record_ids` | string[] \| null | Records contained in this artifact. |
 | `shape` | int[] \| null | Logical array shape, if applicable. |
 | `dtype` | string \| null | e.g. `float32`. |
 
-**Worked example** ([`tests/data/result.embed.example.json`](../tests/data/result.embed.example.json)):
+**Worked example (embed)** ([`tests/data/result.embed.example.json`](../tests/data/result.embed.example.json)):
 
 ```json
 {
-  "contract_version": "0.1",
+  "contract_version": "0.2",
   "capability": "embed",
   "model_name": "esm2_t6_8M",
   "n_input_records": 3,
@@ -200,6 +220,27 @@ The success summary written to `/out/result.json`. Mirrors
   ],
   "warnings": [],
   "params": {"pooling": "mean", "layers": "-1"}
+}
+```
+
+**Worked example (score)** ([`tests/data/result.score.example.json`](../tests/data/result.score.example.json)):
+
+```json
+{
+  "contract_version": "0.2",
+  "capability": "score",
+  "model_name": "esm2_t6_8M",
+  "n_input_records": 3,
+  "n_output_records": 3,
+  "artifacts": [
+    {
+      "path": "scores.csv",
+      "kind": "variant_scores_csv",
+      "record_ids": ["self", "single", "double"]
+    }
+  ],
+  "warnings": [],
+  "params": {"method": "masked-marginal"}
 }
 ```
 
