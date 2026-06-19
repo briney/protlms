@@ -51,10 +51,44 @@ tests/              # Test suite (mirrors src structure)
      how data flows, and any non-obvious design decisions. -->
 
 The goal is a single, consistent inference interface that wraps a variety of
-protein language models (e.g. ESM, ProtT5, AntiBERTy, and others) so that
-embeddings, likelihoods, and downstream predictions can be obtained through one
-API regardless of the underlying model. As models are added, document each
-backend adapter and the shared interface they implement here.
+protein language models so that embeddings, likelihoods, and downstream
+predictions can be obtained through one API regardless of the underlying model.
+The client carries **no ML dependencies**: each model ships as a standalone
+Docker image (weights + deps baked in), and the client talks to images through a
+standardized **container contract** ([`docs/CONTRACT.md`](docs/CONTRACT.md)).
+Adding a model means publishing a contract-compliant image and a registry entry,
+not changing the client. See [`docs/VISION.md`](docs/VISION.md) for the full
+rationale.
 
-TODO: Fill in module layout (model adapters, shared interface, tokenization,
-batching) as the project takes shape.
+### Module layout
+
+- `contract.py` — Pydantic schemas the client and images agree on: `Manifest`,
+  `Result`/`OutputArtifact`, `ContainerError`, plus `CONTRACT_VERSION` and the
+  `Capability`/`PoolingMode` enums. Mirrors `docs/CONTRACT.md` exactly.
+- `registry.py` — `Registry`/`ModelEntry`: resolve a model name/alias to a Docker
+  image, backed by the packaged `_data/models.yaml`.
+- `runner.py` — the `Runner` protocol + `SubprocessDockerRunner`. `build_argv`
+  constructs the exact `docker run` command (mounts, `--gpus`); the protocol seam
+  lets a Docker-SDK runner drop in later without touching the client.
+- `io.py` — FASTA parsing (`read_fasta`), input staging (`stage_inputs`), and
+  output parsing (`read_result`, `load_*_embeddings`, `read_likelihoods`).
+- `models.py` — the integration layer: `plms.load(name)` → `Model` with
+  `embed`/`likelihood`, returning `EmbeddingResult`/`LikelihoodResult`. Validates
+  requests against the manifest, stages inputs, drives the runner, parses outputs.
+- `exceptions.py` — the `PlmsError` hierarchy.
+- `cli.py` — thin Typer wrapper (`plms models list|embed|likelihood`).
+
+### Data flow
+
+`plms.load(name)` resolves the image (`registry`), reads its manifest
+(`runner.manifest`), and checks contract compatibility. `model.embed(...)`
+validates the request against the manifest, stages the FASTA into a temp `/in`
+(`io`), builds a `docker run` command (`runner`), executes it, then parses
+`/out` (`result.json` + arrays/CSV) back into Python objects.
+
+### Containers
+
+`containers/<family>/` holds each model's build context (Dockerfile + entrypoint
+implementing the contract). It is versioned with the client but excluded from the
+wheel. `containers/esm2/` is the reference implementation (HuggingFace
+`transformers`; checkpoint chosen by the `ESM2_CHECKPOINT` build arg).

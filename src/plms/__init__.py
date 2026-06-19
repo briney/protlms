@@ -2,6 +2,44 @@
 
 from __future__ import annotations
 
+from plms.contract import Capability, Manifest, PoolingMode, Result
+from plms.exceptions import (
+    CapabilityNotSupportedError,
+    ContainerExecutionError,
+    ContractVersionError,
+    FastaError,
+    ImageNotFoundError,
+    InvalidRequestError,
+    ModelNotFoundError,
+    OutputParseError,
+    PlmsError,
+    RunnerError,
+)
+from plms.models import EmbeddingResult, LikelihoodResult, Model, load
+from plms.registry import ModelEntry, Registry
+
 __version__ = "0.1.0"
 
-__all__ = ["__version__"]
+__all__ = [
+    "__version__",
+    "load",
+    "Model",
+    "EmbeddingResult",
+    "LikelihoodResult",
+    "Registry",
+    "ModelEntry",
+    "Manifest",
+    "Result",
+    "Capability",
+    "PoolingMode",
+    "PlmsError",
+    "ModelNotFoundError",
+    "ImageNotFoundError",
+    "ContractVersionError",
+    "CapabilityNotSupportedError",
+    "InvalidRequestError",
+    "RunnerError",
+    "ContainerExecutionError",
+    "OutputParseError",
+    "FastaError",
+]

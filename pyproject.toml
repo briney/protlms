@@ -24,8 +24,15 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    # Required for the `plms` command-line interface.
+    # Command-line interface and rich terminal rendering.
     "typer>=0.12",
+    "rich>=13.0",
+    # Schemas for the container contract (manifest, result, errors).
+    "pydantic>=2.7",
+    # Model registry is a human-editable YAML file.
+    "pyyaml>=6.0",
+    # Only used to load result arrays (.npy/.npz) produced by containers.
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]
@@ -34,6 +41,7 @@ dev = [
     "ruff>=0.4",
     "ty>=0.0.40",
     "pre-commit>=3.0",
+    "types-PyYAML>=6.0",
 ]
 
 [project.scripts]
@@ -67,9 +75,17 @@ select = [
 [tool.ruff.lint.isort]
 known-first-party = ["plms"]
 
+[tool.ruff.lint.per-file-ignores]
+# Tests annotate fixtures with types (e.g. pathlib.Path) that are convenient to
+# keep as plain runtime imports rather than moving into TYPE_CHECKING blocks.
+"tests/*" = ["TC001", "TC002", "TC003"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra -q"
+markers = [
+    "slow: end-to-end tests that build and run Docker images (gated on docker availability).",
+]
 
 [tool.ty.environment]
 # ty infers the Python version from `requires-python`; set explicitly for clarity.
