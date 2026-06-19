@@ -175,7 +175,6 @@ def load_model(device: str):  # noqa: ANN201 - returns an ESMC module
     model = ESMC.from_pretrained(
         DEFAULT_CHECKPOINT,
         device=torch.device(device),
-        use_flash_attn=False,
     )
     model.eval()
     return model
@@ -424,7 +423,6 @@ def cmd_prefetch(_args: argparse.Namespace) -> None:
     ESMC.from_pretrained(
         DEFAULT_CHECKPOINT,
         device=torch.device("cpu"),
-        use_flash_attn=False,
     )
     print(f"prefetched {DEFAULT_CHECKPOINT}")
 
