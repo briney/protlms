@@ -1,0 +1,98 @@
+Let's go with execution option 1 (subagent-driven)
+
+---
+
+<task-notification>
+<task-id>a955ed30dde2a1249</task-id>
+<tool-use-id>toolu_014Uvkj9Y2bGzgdZzS7ZjoSP</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a955ed30dde2a1249.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 1: contract bump" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>---
+
+**Status:** DONE
+
+**Commits created:**
+- `f12417e` contract: bump to 0.2 and add variant_scores_csv artifact kind
+
+**Test summary:** All 55 tests pass (18 contract tests green, 4 docker skipped as expected); all linting/formatting/type checks pass
+
+**Concerns:** None
+
+**Report file:** `/home/briney/git/plms/.superpowers/sdd/task-1-report.md`</result>
+<usage><subagent_tokens>29613</subagent_tokens><tool_uses>23</tool_uses><duration_ms>58453</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aa349d717f55bb21e</task-id>
+<tool-use-id>toolu_01PDDEcgLSEgjGcSfwfuU1my</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/aa349d717f55bb21e.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 1 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I have everything I need. Here is the full review:
+
+---
+
+### Spec Compliance
+
+- `src/plms/contract.py:31` — `CONTRACT_VERSION = "0.2"`. Exact match required. ✅
+- `src/plms/contract.py:53` — `VARIANT_SCORES_CSV = "variant_scores_csv"`. Exact match required. ✅
+- `tests/data/manifest.example.json:2` — `"contract_version": "0.2"`. ✅
+- `tests/data/manifest.example.json:5` — `"capabilities": ["embed", "likelihood", "score"]`. ✅
+- `tests/data/result.embed.example.json:2` — `"contract_version": "0.2"`. ✅
+- `tests/data/result.score.example.json` (new file) — matches the brief's exact JSON shape: `contract_version`, `capability`, `model_name`, `n_input_records`, `n_output_records`, `artifacts` (with `path`, `kind`, `record_ids`), `warnings`, `params`. ✅
+- `tests/test_contract.py:138-139` — version assertion updated to `"0.2"` and `(0, 2)`. ✅
+- `tests/test_contract.py:161` — `Capability.SCORE in manifest.capabilities` assertion added. ✅
+- `tests/test_contract.py:171-174` — `test_documented_score_result_example_validates` added, asserts both `Capability.SCORE` and `"variant_scores_csv"` kind. ✅
+- Backward compatibility: `Capability.SCORE` and `Capability.GENERATE` were already present in the enum (both marked "reserved for a future contract minor version") before this diff — no new capability enum values were required. The existing comment `# reserved for a future contract minor version` on `SCORE` remains, which is now slightly inaccurate since this task activates the score capability at the fixture/contract level. ⚠️ Minor.
+- No `score` logic (runner, CLI, adapter) was added anywhere in the diff. Scope is clean. ✅
+- All five files named in the brief are the only files touched. ✅
+
+---
+
+### Strengths
+
+- Diff is minimal and surgical — exactly the five files specified in the brief, no stray edits.
+- The `result.score.example.json` fixture matches the brief's JSON verbatim, including field ordering and the inline artifact object (compact style with no extra whitespace indentation in the artifact array).
+- `test_documented_score_result_example_validates` tests both the capability identity (`is Capability.SCORE`) and the exact artifact kind string, giving the drift guard real teeth.
+- `test_documented_manifest_example_validates` now has the `contract_version == CONTRACT_VERSION` check (pre-existing) plus both `EMBED` and `SCORE` capability assertions — good belt-and-suspenders for the fixture.
+- All tooling (ruff, ty) reported clean; the commit message follows the project convention.
+
+---
+
+### Issues
+
+#### Minor (Nice to Have)
+
+**`src/plms/contract.py:39` — Stale inline comment on `Capability.SCORE`**
+
+```python
+SCORE = "score"  # reserved for a future contract minor version
+```
+
+This comment was accurate before this task but is now misleading: the contract has been bumped to 0.2 specifically to activate `score`. The comment should be removed or updated (e.g., `# activated in 0.2`). No functional impact, but it will confuse a future reader who sees 0.2 in the version constant and "reserved for a future minor version" on the same enum member.
+
+**`tests/test_contract.py:171-174` — Missing docstring on new test**
+
+`test_documented_result_example_validates` (the existing embed test, line 165) has a docstring:
+```python
+"""The worked example in docs/CONTRACT.md must parse as a Result."""
+```
+The new `test_documented_score_result_example_validates` (line 171) has none. Consistent with the project style (and the brief's docstring-on-all-public-functions rule), it should have one, e.g.:
+```python
+"""The score result example in docs/CONTRACT.md must parse as a Result with score capability."""
+```
+
+---
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** All spec requirements are met exactly — correct version string, correct enum value, all three fixtures updated/created to spec, all required test assertions present, no out-of-scope changes. The two findings are both cosmetic/style-only and do not affect correctness or the drift guard.</result>
+<usage><subagent_tokens>22144</subagent_tokens><tool_uses>3</tool_uses><duration_ms>30529</duration_ms></usage>
+</task-notification>
