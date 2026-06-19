@@ -1,0 +1,15 @@
+# plms model registry — maps model names/aliases to local Docker image references.
+#
+# Phase 0 images are built locally from containers/esm2 (see that directory's
+# README). Add an entry per model; `name` is canonical, `aliases` are accepted
+# alternatives, `image` is the Docker image reference, `model_family` groups
+# related models.
+models:
+  - name: esm2-8m
+    aliases: [esm2_t6_8M]
+    image: plms-esm2:t6_8M
+    model_family: esm2
+  - name: esm2-650m
+    aliases: [esm2_t33_650M]
+    image: plms-esm2:t33_650M
+    model_family: esm2

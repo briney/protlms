@@ -1,0 +1,18 @@
+{
+  "contract_version": "0.1",
+  "capability": "embed",
+  "model_name": "esm2_t6_8M",
+  "n_input_records": 3,
+  "n_output_records": 3,
+  "artifacts": [
+    {
+      "path": "embeddings.npz",
+      "kind": "pooled_embeddings",
+      "record_ids": ["insulin_b", "gb1", "melittin"],
+      "shape": [3, 320],
+      "dtype": "float32"
+    }
+  ],
+  "warnings": [],
+  "params": {"pooling": "mean", "layers": "-1"}
+}
