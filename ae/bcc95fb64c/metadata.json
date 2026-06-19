@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "aebcc95fb64c",
+  "strategy": "manual-commit",
+  "branch": "feature/phase1-input-chunking",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/ae/bcc95fb64c/0/metadata.json",
+      "transcript": "/ae/bcc95fb64c/0/full.jsonl",
+      "content_hash": "/ae/bcc95fb64c/0/content_hash.txt",
+      "prompt": "/ae/bcc95fb64c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 10784,
+    "cache_creation_tokens": 367898,
+    "cache_read_tokens": 18525247,
+    "output_tokens": 200881,
+    "api_call_count": 99
+  }
+}
