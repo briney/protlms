@@ -17,3 +17,11 @@ models:
     aliases: [progen2_small]
     image: plms-progen2:small
     model_family: progen2
+  - name: esm-c-300m
+    aliases: [esmc_300m]
+    image: plms-esm-c:300m
+    model_family: esm-c
+  - name: esm-c-600m
+    aliases: [esmc_600m]
+    image: plms-esm-c:600m
+    model_family: esm-c

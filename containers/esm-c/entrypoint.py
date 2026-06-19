@@ -1,0 +1,514 @@
+#!/usr/bin/env python
+"""Contract-compliant entrypoint for the ESM-C model image.
+
+Implements the plms container contract (see docs/CONTRACT.md) for the ESM-C
+masked protein language model via EvolutionaryScale's native ``esm`` SDK. Exposes
+the ``manifest``, ``embed``, ``likelihood``, and ``score`` subcommands plus a
+hidden ``_prefetch`` used at build time to bake weights into the image.
+
+Heavy imports (``torch``, ``esm``) happen inside the functions that need them, so
+the pure helpers can be unit-tested without the ML stack installed.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+CONTRACT_VERSION = "0.3"
+MAX_SEQUENCE_LENGTH = 2048
+DEFAULT_BATCH_SIZE = 8
+DEFAULT_CHECKPOINT = os.environ.get("ESMC_CHECKPOINT", "esmc_300m")
+
+# Architecture facts keyed by checkpoint name. Keeping these here lets `manifest`
+# stay model-load-free (the checkpoint name pins the architecture, so there is no
+# drift risk): embedding_dim is the model width, num_layers the transformer depth.
+_MODEL_INFO: dict[str, dict[str, object]] = {
+    "esmc_300m": {"embedding_dim": 960, "num_layers": 30, "min_gpu_memory_gb": None},
+    "esmc_600m": {"embedding_dim": 1152, "num_layers": 36, "min_gpu_memory_gb": 4.0},
+}
+
+_ID_SAFE = re.compile(r"[^A-Za-z0-9._-]")
+_MUTANT_RE = re.compile(r"^([A-Za-z])(\d+)([A-Za-z])$")
+
+
+# --- pure helpers (unit-testable without torch/esm) ------------------------
+
+
+def sanitize_ids(ids: list[str]) -> list[str]:
+    """Sanitize record ids for filenames/keys, de-duplicating collisions."""
+    seen: dict[str, int] = {}
+    out: list[str] = []
+    for raw in ids:
+        clean = _ID_SAFE.sub("_", raw) or "seq"
+        if clean in seen:
+            seen[clean] += 1
+            clean = f"{clean}__{seen[clean]}"
+        else:
+            seen[clean] = 0
+        out.append(clean)
+    return out
+
+
+def read_fasta(path: Path) -> list[tuple[str, str]]:
+    """Parse a FASTA file into ``(id, sequence)`` tuples."""
+    records: list[tuple[str, str]] = []
+    header: str | None = None
+    chunks: list[str] = []
+    for raw in Path(path).read_text().splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith(">"):
+            if header is not None:
+                records.append((header, "".join(chunks).upper()))
+            header = line[1:].split(maxsplit=1)[0] if line[1:].split() else line[1:]
+            chunks = []
+        else:
+            chunks.append(line)
+    if header is not None:
+        records.append((header, "".join(chunks).upper()))
+    return records
+
+
+def perplexity_from_mean(mean_log_likelihood: float) -> float:
+    """Pseudo-perplexity from a mean pseudo-log-likelihood."""
+    import math
+
+    return math.exp(-mean_log_likelihood)
+
+
+def parse_mutant(mutant: str) -> list[tuple[str, int, str]]:
+    """Parse a mutation string like ``A24G`` or ``A24G:T56S`` (1-indexed)."""
+    subs: list[tuple[str, int, str]] = []
+    for token in mutant.split(":"):
+        match = _MUTANT_RE.match(token.strip())
+        if not match:
+            raise ValueError(f"invalid mutation token {token!r}")
+        subs.append((match.group(1).upper(), int(match.group(2)), match.group(3).upper()))
+    return subs
+
+
+def _valid_positions(group: list[dict], wt_seq: str) -> set[int]:
+    """Collect in-range mutated positions across a WT group (for logit computation)."""
+    positions: set[int] = set()
+    for row in group:
+        try:
+            for _wt, pos, _mut in parse_mutant(row["mutant"]):
+                if 1 <= pos <= len(wt_seq):
+                    positions.add(pos)
+        except ValueError:
+            continue
+    return positions
+
+
+def _truncate(seq: str, warnings: list[str], record_id: str) -> str:
+    if len(seq) > MAX_SEQUENCE_LENGTH:
+        warnings.append(f"sequence {record_id!r} truncated to {MAX_SEQUENCE_LENGTH} residues")
+        return seq[:MAX_SEQUENCE_LENGTH]
+    return seq
+
+
+# --- contract I/O ----------------------------------------------------------
+
+
+def write_result(output_dir: Path, payload: dict) -> None:
+    """Write the ``result.json`` success summary."""
+    (output_dir / "result.json").write_text(json.dumps(payload, indent=2))
+
+
+def emit_error_and_exit(error_type: str, message: str, **details: str) -> None:
+    """Write a structured ContainerError to stderr and exit non-zero."""
+    error = {
+        "contract_version": CONTRACT_VERSION,
+        "error_type": error_type,
+        "message": message,
+        "details": {k: str(v) for k, v in details.items()},
+    }
+    print(json.dumps(error), file=sys.stderr)
+    raise SystemExit(1)
+
+
+def build_manifest() -> dict:
+    """Build the manifest dict from the checkpoint-keyed architecture table."""
+    info = _MODEL_INFO[DEFAULT_CHECKPOINT]
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "name": DEFAULT_CHECKPOINT,
+        "version": "1.0.0",
+        "description": f"ESM-C masked protein language model ({DEFAULT_CHECKPOINT}).",
+        "model_family": "esm-c",
+        "capabilities": ["embed", "likelihood", "score"],
+        "embedding_dim": info["embedding_dim"],
+        "max_sequence_length": MAX_SEQUENCE_LENGTH,
+        "pooling_modes": ["mean", "cls", "none"],
+        "num_layers": info["num_layers"],
+        "min_gpu_memory_gb": info["min_gpu_memory_gb"],
+        "default_batch_size": DEFAULT_BATCH_SIZE,
+    }
+
+
+# --- model helpers ---------------------------------------------------------
+
+
+def pick_device(requested: str | None) -> str:
+    """Choose the torch device, validating an explicit ``cuda`` request."""
+    import torch
+
+    available = "cuda" if torch.cuda.is_available() else "cpu"
+    if requested in (None, "auto"):
+        return available
+    if requested == "cuda" and available != "cuda":
+        emit_error_and_exit("DeviceUnavailable", "cuda requested but no GPU is available")
+    return requested
+
+
+def load_model(device: str):  # noqa: ANN201 - returns an ESMC module
+    """Load the ESM-C model for the configured checkpoint (flash-attn not installed)."""
+    import torch
+    from esm.models.esmc import ESMC
+
+    model = ESMC.from_pretrained(
+        DEFAULT_CHECKPOINT,
+        device=torch.device(device),
+    )
+    model.eval()
+    return model
+
+
+def _encode_ids(model, seq: str):  # noqa: ANN001, ANN202
+    """Tokenize a sequence to a 1-D token-id tensor (incl BOS/EOS) on CPU."""
+    from esm.sdk.api import ESMProtein
+
+    tensor = model.encode(ESMProtein(sequence=seq))
+    return tensor.sequence.cpu()  # (T,) long
+
+
+def _embed_one(model, seq: str, device: str):  # noqa: ANN001, ANN202
+    """Return (per-residue (L, D), cls (D,)) float32 arrays for one sequence."""
+    import numpy as np
+    import torch
+
+    ids = _encode_ids(model, seq).unsqueeze(0).to(device)  # (1, T)
+    with torch.no_grad():
+        out = model(sequence_tokens=ids)
+    emb = out.embeddings[0].float().cpu().numpy()  # (T, D)
+    residue = emb[1 : 1 + len(seq)].astype(np.float32)  # strip BOS/EOS
+    cls_vec = emb[0].astype(np.float32)
+    return residue, cls_vec
+
+
+def _pseudo_log_likelihood(model, seq: str, batch_size: int, device: str) -> float:  # noqa: ANN001
+    """Masked-marginal pseudo-log-likelihood: O(L) masked forward passes."""
+    import torch
+
+    ids = _encode_ids(model, seq)  # (T,)
+    mask_id = model.tokenizer.mask_token_id
+    positions = list(range(1, len(ids) - 1))  # residues only
+    total = 0.0
+    for start in range(0, len(positions), batch_size):
+        chunk = positions[start : start + batch_size]
+        batch = ids.repeat(len(chunk), 1)  # (b, T)
+        for row, pos in enumerate(chunk):
+            batch[row, pos] = mask_id
+        with torch.no_grad():
+            out = model(sequence_tokens=batch.to(device))
+        log_probs = torch.log_softmax(out.sequence_logits.float(), dim=-1)
+        for row, pos in enumerate(chunk):
+            total += float(log_probs[row, pos, ids[pos]])
+    return total
+
+
+def _masked_position_logprobs(model, seq, positions, batch_size, device):  # noqa: ANN001
+    """Map each 1-indexed position to its masked log-softmax vector over the vocab."""
+    import torch
+
+    ids = _encode_ids(model, seq)
+    mask_id = model.tokenizer.mask_token_id
+    ordered = sorted(positions)
+    out: dict[int, object] = {}
+    for start in range(0, len(ordered), batch_size):
+        chunk = ordered[start : start + batch_size]
+        batch = ids.repeat(len(chunk), 1)
+        for row, pos in enumerate(chunk):
+            batch[row, pos] = mask_id
+        with torch.no_grad():
+            res = model(sequence_tokens=batch.to(device))
+        log_probs = torch.log_softmax(res.sequence_logits.float(), dim=-1)
+        for row, pos in enumerate(chunk):
+            out[pos] = log_probs[row, pos].cpu().numpy()
+    return out
+
+
+def _wt_position_logprobs(model, seq, positions, device):  # noqa: ANN001
+    """Map each 1-indexed position to its unmasked (WT-context) log-softmax vector."""
+    import torch
+
+    ids = _encode_ids(model, seq).unsqueeze(0).to(device)
+    with torch.no_grad():
+        out = model(sequence_tokens=ids)
+    log_probs = torch.log_softmax(out.sequence_logits.float(), dim=-1)[0].cpu().numpy()
+    return {pos: log_probs[pos] for pos in positions}
+
+
+def _score_variant(mutant, wt_seq, logp_by_pos, tokenizer):  # noqa: ANN001
+    """Return (score, n_mutations, error_message_or_None) for one variant."""
+    try:
+        subs = parse_mutant(mutant)
+    except ValueError as exc:
+        return None, 0, str(exc)
+    total = 0.0
+    for wt_aa, pos, mut_aa in subs:
+        if not 1 <= pos <= len(wt_seq):
+            return None, len(subs), f"position {pos} out of range for {mutant}"
+        if wt_seq[pos - 1] != wt_aa:
+            return None, len(subs), f"WT residue mismatch at {pos} in {mutant}"
+        vec = logp_by_pos[pos]
+        wt_id = tokenizer.convert_tokens_to_ids(wt_aa)
+        mut_id = tokenizer.convert_tokens_to_ids(mut_aa)
+        total += float(vec[mut_id] - vec[wt_id])
+    return total, len(subs), None
+
+
+# --- subcommands -----------------------------------------------------------
+
+
+def cmd_manifest(_args: argparse.Namespace) -> None:
+    print(json.dumps(build_manifest()))
+
+
+def cmd_embed(args: argparse.Namespace) -> None:
+    import numpy as np
+
+    layer = int(args.layers.split(",")[0])
+    if layer != -1:
+        emit_error_and_exit(
+            "InvalidInput",
+            "esm-c image supports only the final layer (--layers -1)",
+            layers=args.layers,
+        )
+    device = pick_device(args.device)
+    model = load_model(device)
+    records = read_fasta(Path(args.input))
+    ids = sanitize_ids([rid for rid, _ in records])
+    output_dir = Path(args.output)
+    warnings: list[str] = []
+
+    pooled: dict[str, object] = {}
+    artifacts: list[dict] = []
+    per_residue_dir = output_dir / "per_residue"
+    if args.pooling == "none":
+        per_residue_dir.mkdir(parents=True, exist_ok=True)
+
+    dim = _MODEL_INFO[DEFAULT_CHECKPOINT]["embedding_dim"]
+    for clean_id, (rid, seq) in zip(ids, records, strict=True):
+        seq = _truncate(seq, warnings, rid)
+        residue, cls_vec = _embed_one(model, seq, device)
+        if args.pooling == "mean":
+            pooled[clean_id] = residue.mean(axis=0)
+        elif args.pooling == "cls":
+            pooled[clean_id] = cls_vec
+        else:  # none
+            _save_npy(per_residue_dir / f"{clean_id}.npy", residue)
+            artifacts.append(
+                {
+                    "path": f"per_residue/{clean_id}.npy",
+                    "kind": "per_residue_embeddings",
+                    "record_ids": [clean_id],
+                    "shape": list(residue.shape),
+                    "dtype": "float32",
+                }
+            )
+
+    if args.pooling in ("mean", "cls"):
+        np.savez(output_dir / "embeddings.npz", **pooled)
+        artifacts.append(
+            {
+                "path": "embeddings.npz",
+                "kind": "pooled_embeddings",
+                "record_ids": ids,
+                "shape": [len(ids), dim],
+                "dtype": "float32",
+            }
+        )
+    _write_capability_result(output_dir, "embed", records, artifacts, warnings, args)
+
+
+def cmd_likelihood(args: argparse.Namespace) -> None:
+    device = pick_device(args.device)
+    model = load_model(device)
+    batch_size = args.batch_size or DEFAULT_BATCH_SIZE
+    records = read_fasta(Path(args.input))
+    ids = sanitize_ids([rid for rid, _ in records])
+    output_dir = Path(args.output)
+    warnings: list[str] = []
+
+    rows = ["record_id,seq_len,log_likelihood,mean_log_likelihood,perplexity"]
+    for clean_id, (rid, seq) in zip(ids, records, strict=True):
+        seq = _truncate(seq, warnings, rid)
+        pll = _pseudo_log_likelihood(model, seq, batch_size, device)
+        mean = pll / max(len(seq), 1)
+        rows.append(f"{clean_id},{len(seq)},{pll:.6f},{mean:.6f},{perplexity_from_mean(mean):.6f}")
+    (output_dir / "likelihoods.csv").write_text("\n".join(rows) + "\n")
+
+    artifacts = [{"path": "likelihoods.csv", "kind": "likelihoods_csv", "record_ids": ids}]
+    _write_capability_result(output_dir, "likelihood", records, artifacts, warnings, args)
+
+
+def cmd_score(args: argparse.Namespace) -> None:
+    """Score variants (masked-marginal or wt-marginal) from a CSV input."""
+    import csv as csv_module
+
+    device = pick_device(args.device)
+    model = load_model(device)
+    batch_size = args.batch_size or DEFAULT_BATCH_SIZE
+    with Path(args.input).open(newline="") as handle:
+        rows = list(csv_module.DictReader(handle))
+    warnings: list[str] = []
+    groups: dict[str, list[dict]] = {}
+    for row in rows:
+        groups.setdefault(row["wt_sequence"], []).append(row)
+
+    out_rows: list[list[object]] = []
+    for wt_seq, group in groups.items():
+        seq = _truncate(wt_seq, warnings, "<wt>")
+        positions = _valid_positions(group, seq)
+        if args.method == "wt-marginal":
+            logp = _wt_position_logprobs(model, seq, positions, device)
+        else:
+            logp = _masked_position_logprobs(model, seq, positions, batch_size, device)
+        for row in group:
+            score, n_mut, err = _score_variant(row["mutant"], seq, logp, model.tokenizer)
+            if err is not None:
+                warnings.append(f"{row['variant_id']}: {err}")
+            score_str = "" if score is None else f"{score:.6f}"
+            out_rows.append([row["variant_id"], row["mutant"], n_mut, score_str])
+
+    output_dir = Path(args.output)
+    with (output_dir / "scores.csv").open("w", newline="") as handle:
+        writer = csv_module.writer(handle)
+        writer.writerow(["variant_id", "mutant", "n_mutations", "score"])
+        writer.writerows(out_rows)
+    artifacts = [
+        {
+            "path": "scores.csv",
+            "kind": "variant_scores_csv",
+            "record_ids": [r["variant_id"] for r in rows],
+        }
+    ]
+    write_result(
+        output_dir,
+        {
+            "contract_version": CONTRACT_VERSION,
+            "capability": "score",
+            "model_name": DEFAULT_CHECKPOINT,
+            "n_input_records": len(rows),
+            "n_output_records": len(rows),
+            "artifacts": artifacts,
+            "warnings": warnings,
+            "params": {"method": args.method, "device": args.device or "auto"},
+        },
+    )
+
+
+def cmd_prefetch(_args: argparse.Namespace) -> None:
+    """Bake weights into the image at build time (populate the HF cache)."""
+    import torch
+    from esm.models.esmc import ESMC
+
+    ESMC.from_pretrained(
+        DEFAULT_CHECKPOINT,
+        device=torch.device("cpu"),
+    )
+    print(f"prefetched {DEFAULT_CHECKPOINT}")
+
+
+# --- shared result writer + arg parsing ------------------------------------
+
+
+def _save_npy(path: Path, array) -> None:  # noqa: ANN001
+    import numpy as np
+
+    np.save(path, array.astype(np.float32))
+
+
+def _write_capability_result(
+    output_dir: Path,
+    capability: str,
+    records: list,
+    artifacts: list[dict],
+    warnings: list[str],
+    args: argparse.Namespace,
+) -> None:
+    params = {"device": args.device or "auto"}
+    if capability == "embed":
+        params |= {"pooling": args.pooling, "layers": args.layers}
+    elif capability == "likelihood":
+        params |= {"likelihood_method": "masked_marginal"}
+    write_result(
+        output_dir,
+        {
+            "contract_version": CONTRACT_VERSION,
+            "capability": capability,
+            "model_name": DEFAULT_CHECKPOINT,
+            "n_input_records": len(records),
+            "n_output_records": len(records),
+            "artifacts": artifacts,
+            "warnings": warnings,
+            "params": params,
+        },
+    )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="esm-c", description="ESM-C plms contract entrypoint.")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("manifest").set_defaults(func=cmd_manifest)
+
+    embed = sub.add_parser("embed")
+    embed.add_argument("--input", required=True)
+    embed.add_argument("--output", required=True)
+    embed.add_argument("--pooling", default="mean", choices=["mean", "cls", "none"])
+    embed.add_argument("--layers", default="-1")
+    embed.add_argument("--batch-size", type=int, default=None, dest="batch_size")
+    embed.add_argument("--device", default=None, choices=["cpu", "cuda", "auto"])
+    embed.set_defaults(func=cmd_embed)
+
+    likelihood = sub.add_parser("likelihood")
+    likelihood.add_argument("--input", required=True)
+    likelihood.add_argument("--output", required=True)
+    likelihood.add_argument("--batch-size", type=int, default=None, dest="batch_size")
+    likelihood.add_argument("--device", default=None, choices=["cpu", "cuda", "auto"])
+    likelihood.set_defaults(func=cmd_likelihood)
+
+    score = sub.add_parser("score")
+    score.add_argument("--input", required=True)
+    score.add_argument("--output", required=True)
+    score.add_argument(
+        "--method", default="masked-marginal", choices=["masked-marginal", "wt-marginal"]
+    )
+    score.add_argument("--batch-size", type=int, default=None, dest="batch_size")
+    score.add_argument("--device", default=None, choices=["cpu", "cuda", "auto"])
+    score.set_defaults(func=cmd_score)
+
+    sub.add_parser("_prefetch").set_defaults(func=cmd_prefetch)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
+    try:
+        args.func(args)
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001 - top-level: report as a structured error
+        emit_error_and_exit("InternalError", str(exc), exception=type(exc).__name__)
+
+
+if __name__ == "__main__":
+    main()
