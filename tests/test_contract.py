@@ -39,8 +39,8 @@ def _manifest_dict() -> dict:
 
 
 def test_contract_version_is_semantic_string() -> None:
-    assert CONTRACT_VERSION == "0.1"
-    assert parse_contract_version(CONTRACT_VERSION) == (0, 1)
+    assert CONTRACT_VERSION == "0.2"
+    assert parse_contract_version(CONTRACT_VERSION) == (0, 2)
 
 
 def test_manifest_round_trip() -> None:
@@ -141,6 +141,7 @@ def test_documented_manifest_example_validates() -> None:
     manifest = Manifest.model_validate_json((_DATA / "manifest.example.json").read_text())
     assert manifest.contract_version == CONTRACT_VERSION
     assert Capability.EMBED in manifest.capabilities
+    assert Capability.SCORE in manifest.capabilities
 
 
 def test_documented_result_example_validates() -> None:
@@ -148,6 +149,12 @@ def test_documented_result_example_validates() -> None:
     result = Result.model_validate_json((_DATA / "result.embed.example.json").read_text())
     assert result.capability is Capability.EMBED
     assert result.artifacts[0].kind == "pooled_embeddings"
+
+
+def test_documented_score_result_example_validates() -> None:
+    result = Result.model_validate_json((_DATA / "result.score.example.json").read_text())
+    assert result.capability is Capability.SCORE
+    assert result.artifacts[0].kind == "variant_scores_csv"
 
 
 def test_container_execution_error_carries_structured_fields() -> None:

@@ -1,5 +1,5 @@
 {
-  "contract_version": "0.1",
+  "contract_version": "0.2",
   "capability": "embed",
   "model_name": "esm2_t6_8M",
   "n_input_records": 3,

@@ -1,0 +1,12 @@
+{
+  "contract_version": "0.2",
+  "capability": "score",
+  "model_name": "esm2_t6_8M",
+  "n_input_records": 3,
+  "n_output_records": 3,
+  "artifacts": [
+    {"path": "scores.csv", "kind": "variant_scores_csv", "record_ids": ["self", "single", "double"]}
+  ],
+  "warnings": [],
+  "params": {"method": "masked-marginal"}
+}
