@@ -159,7 +159,7 @@ def check_csv_has_columns(path: Path, required: Iterable[str]) -> None:
     Raises:
         InvalidRequestError: If any required column is absent.
     """
-    with Path(path).open(newline="") as handle:
+    with path.open(newline="") as handle:
         header = next(csv.reader(handle), [])
     missing = [column for column in required if column not in header]
     if missing:
@@ -220,7 +220,11 @@ def _read_csv_artifact(
     kind: ArtifactKind,
     column_types: dict[str, type],
 ) -> list[dict[str, str | int | float | None]]:
-    """Read a single CSV artifact, coercing numeric columns (blanks -> None)."""
+    """Read a single CSV artifact, coercing numeric columns (blanks -> None).
+
+    Raises:
+        OutputParseError: If the result declares no artifact of the given kind.
+    """
     artifacts = _artifacts(result, kind)
     if not artifacts:
         raise OutputParseError(f"result declares no {kind.value} artifact")

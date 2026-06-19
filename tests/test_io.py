@@ -192,12 +192,10 @@ def test_read_likelihoods_coerces_numeric_columns(tmp_path: Path) -> None:
     assert rows[0]["pseudo_perplexity"] == pytest.approx(2.01)
 
 
-def test_stage_file_copies_input_under_dest_name() -> None:
-    import tempfile
-
+def test_stage_file_copies_input_under_dest_name(tmp_path: Path) -> None:
     from plms.io import stage_file
 
-    src = Path(tempfile.mkdtemp()) / "v.csv"
+    src = tmp_path / "v.csv"
     src.write_text("variant_id,wt_sequence,mutant\nv1,ACDE,A1G\n")
     with stage_file(src, "variants.csv") as job:
         staged = job.input_dir / "variants.csv"
