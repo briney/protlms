@@ -171,25 +171,46 @@ def test_load_per_residue_embeddings(tmp_path: Path) -> None:
 
 def test_read_likelihoods_coerces_numeric_columns(tmp_path: Path) -> None:
     (tmp_path / "likelihoods.csv").write_text(
-        "record_id,seq_len,pseudo_log_likelihood,mean_pseudo_log_likelihood,pseudo_perplexity\n"
-        "seq1,5,-3.5,-0.7,2.01\n"
+        "record_id,seq_len,log_likelihood,mean_log_likelihood,perplexity\nseq1,5,-3.5,-0.7,2.01\n"
     )
-    _write_result(
-        tmp_path,
-        {
-            "contract_version": "0.1",
-            "capability": "likelihood",
-            "model_name": "m",
-            "n_input_records": 1,
-            "n_output_records": 1,
-            "artifacts": [{"path": "likelihoods.csv", "kind": "likelihoods_csv"}],
-        },
+    (tmp_path / "result.json").write_text(
+        json.dumps(
+            {
+                "contract_version": "0.3",
+                "capability": "likelihood",
+                "model_name": "m",
+                "n_input_records": 1,
+                "n_output_records": 1,
+                "artifacts": [{"path": "likelihoods.csv", "kind": "likelihoods_csv"}],
+            }
+        )
     )
     result = read_result(tmp_path)
     rows = read_likelihoods(tmp_path, result)
-    assert rows[0]["record_id"] == "seq1"
     assert rows[0]["seq_len"] == 5
-    assert rows[0]["pseudo_perplexity"] == pytest.approx(2.01)
+    assert rows[0]["perplexity"] == pytest.approx(2.01)
+
+
+def test_read_generated(tmp_path: Path) -> None:
+    from plms.io import read_generated
+
+    (tmp_path / "generated.fasta").write_text(">p__sample0\nACDE\n>p__sample1\nFGHI\n")
+    (tmp_path / "result.json").write_text(
+        json.dumps(
+            {
+                "contract_version": "0.3",
+                "capability": "generate",
+                "model_name": "m",
+                "n_input_records": 1,
+                "n_output_records": 2,
+                "artifacts": [{"path": "generated.fasta", "kind": "generated_fasta"}],
+            }
+        )
+    )
+    result = read_result(tmp_path)
+    records = read_generated(tmp_path, result)
+    assert [r.id for r in records] == ["p__sample0", "p__sample1"]
+    assert records[0].sequence == "ACDE"
 
 
 def test_stage_file_copies_input_under_dest_name(tmp_path: Path) -> None:

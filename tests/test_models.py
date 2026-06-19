@@ -98,9 +98,7 @@ class FakeRunner:
         self._write_result(out, "embed", records, artifacts)
 
     def _write_likelihood(self, out: Path, records) -> None:  # noqa: ANN001
-        lines = [
-            "record_id,seq_len,pseudo_log_likelihood,mean_pseudo_log_likelihood,pseudo_perplexity"
-        ]
+        lines = ["record_id,seq_len,log_likelihood,mean_log_likelihood,perplexity"]
         for rec in records:
             lines.append(f"{rec.id},{len(rec.sequence)},-3.5,-0.7,2.01")
         (out / "likelihoods.csv").write_text("\n".join(lines) + "\n")
@@ -231,7 +229,7 @@ def test_likelihood_returns_rows(fasta: Path, tmp_path: Path) -> None:
     assert isinstance(result, LikelihoodResult)
     rows = result.rows()
     assert {r["record_id"] for r in rows} == {"seq1", "seq2"}
-    assert rows[0]["pseudo_perplexity"] == pytest.approx(2.01)
+    assert rows[0]["perplexity"] == pytest.approx(2.01)
 
 
 def test_container_error_is_surfaced_with_structured_fields(fasta: Path, tmp_path: Path) -> None:
