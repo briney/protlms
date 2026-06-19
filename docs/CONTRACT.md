@@ -151,11 +151,13 @@ original.
 |---|---|
 | `record_id` | The (sanitized) record id. |
 | `seq_len` | Number of scored residues. |
-| `log_likelihood` | Σ over positions of log P(true residue). The method (masked-marginal vs. causal) is recorded in `result.json` `params.likelihood_method`. |
+| `log_likelihood` | Σ over positions of log P(true residue). |
 | `mean_log_likelihood` | `log_likelihood / seq_len` (length-normalized). |
 | `perplexity` | `exp(-mean_log_likelihood)`. |
 
-The method used (e.g. masked-marginal or causal) is recorded in the result JSON under `params.likelihood_method`.
+The scoring method is recorded in `result.json` under `params.likelihood_method`,
+whose value is `"masked_marginal"` (masked LMs such as ESM2) or `"causal"`
+(autoregressive LMs such as ProGen2).
 
 **`variants.csv` input columns (for `score`):**
 
