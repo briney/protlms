@@ -1,0 +1,13 @@
+{
+  "contract_version": "0.3",
+  "capability": "generate",
+  "model_name": "progen2-small",
+  "n_input_records": 2,
+  "n_output_records": 4,
+  "artifacts": [
+    {"path": "generated.fasta", "kind": "generated_fasta",
+     "record_ids": ["prompt1__sample0", "prompt1__sample1", "uncond__sample0", "uncond__sample1"]}
+  ],
+  "warnings": [],
+  "params": {"num_samples": "2", "temperature": "0.8", "top_p": "0.9", "seed": "42"}
+}

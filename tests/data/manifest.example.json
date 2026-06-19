@@ -1,5 +1,5 @@
 {
-  "contract_version": "0.2",
+  "contract_version": "0.3",
   "name": "esm2_t6_8M",
   "version": "1.0.0",
   "description": "ESM2 8M-parameter masked protein language model.",
