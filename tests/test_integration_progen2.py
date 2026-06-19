@@ -75,6 +75,7 @@ def test_generate_is_deterministic_with_seed(model: plms.Model, tmp_path: Path) 
     )
     a = {r.id: r.sequence for r in first.sequences()}
     b = {r.id: r.sequence for r in second.sequences()}
+    assert len(a) == 4  # 2 prompts x num_samples=2
     assert a == b  # same seed => identical output
 
 
@@ -96,8 +97,10 @@ def test_generate_produces_valid_sequences(model: plms.Model, tmp_path: Path) ->
 
 
 def test_progen2_likelihood(model: plms.Model, tmp_path: Path) -> None:
-    rows = model.likelihood(SEQS, output_dir=tmp_path / "ll").rows()
+    result = model.likelihood(SEQS, output_dir=tmp_path / "ll")
+    rows = result.rows()
     assert len(rows) == 3
+    assert result.result.params.get("likelihood_method") == "causal"
     for row in rows:
         assert math.isfinite(float(row["log_likelihood"]))
         assert row["perplexity"] > 1.0
