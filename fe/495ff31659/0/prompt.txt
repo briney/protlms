@@ -1,0 +1,5 @@
+Yes, open the PR
+
+---
+
+yes, add the agent dirs to gitignore
