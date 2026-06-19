@@ -15,7 +15,14 @@ from plms.exceptions import (
     PlmsError,
     RunnerError,
 )
-from plms.models import EmbeddingResult, LikelihoodResult, Model, ScoreResult, load
+from plms.models import (
+    EmbeddingResult,
+    GenerationResult,
+    LikelihoodResult,
+    Model,
+    ScoreResult,
+    load,
+)
 from plms.registry import ModelEntry, Registry
 
 __version__ = "0.1.0"
@@ -27,6 +34,7 @@ __all__ = [
     "EmbeddingResult",
     "LikelihoodResult",
     "ScoreResult",
+    "GenerationResult",
     "Registry",
     "ModelEntry",
     "Manifest",

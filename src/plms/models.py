@@ -31,6 +31,7 @@ from plms.io import (
     load_per_residue_embeddings,
     load_pooled_embeddings,
     read_fasta,
+    read_generated,
     read_likelihoods,
     read_result,
     read_variant_scores,
@@ -95,6 +96,19 @@ class ScoreResult:
     def rows(self) -> list[dict[str, str | int | float | None]]:
         """Return one row per variant: variant_id, mutant, n_mutations, score."""
         return read_variant_scores(self.output_dir, self.result)
+
+
+@dataclass
+class GenerationResult:
+    """Handle to the outputs of a ``generate`` run (FASTA parsed lazily)."""
+
+    result: Result
+    output_dir: Path
+    _keepalive: tempfile.TemporaryDirectory | None = field(default=None, repr=False)
+
+    def sequences(self) -> list[FastaRecord]:
+        """Return the generated sequences (headers ``{prompt_id}__sample{k}``)."""
+        return read_generated(self.output_dir, self.result)
 
 
 class Model:
@@ -212,6 +226,59 @@ class Model:
             Capability.SCORE, stage_file(path, "variants.csv"), extra, output_dir, use_gpu
         )
         return ScoreResult(result=result, output_dir=out_dir, method=method, _keepalive=keep)
+
+    def generate(
+        self,
+        prompts_fasta: str | Path,
+        *,
+        num_samples: int = 1,
+        temperature: float = 1.0,
+        top_p: float = 1.0,
+        max_length: int | None = None,
+        seed: int | None = None,
+        output_dir: Path | None = None,
+        use_gpu: bool = False,
+        batch_size: int | None = None,
+    ) -> GenerationResult:
+        """Sample sequences from an autoregressive model.
+
+        Args:
+            prompts_fasta: FASTA of prompt prefixes; an empty sequence means
+                unconditional sampling. At least one record is required.
+            num_samples: Samples to draw per prompt.
+            temperature: Sampling temperature.
+            top_p: Nucleus-sampling probability mass.
+            max_length: Maximum sequence length (model default if ``None``).
+            seed: Random seed for reproducible sampling.
+            output_dir: Where to write outputs; a temporary directory if ``None``.
+            use_gpu: Request all GPUs for the container run.
+            batch_size: Override the model's default batch size.
+
+        Raises:
+            CapabilityNotSupportedError: If the model does not support generation.
+            InvalidRequestError: If the prompts file contains no records.
+            ContainerExecutionError: If the container run fails.
+        """
+        self._require_capability(Capability.GENERATE)
+        records = self._read_records(prompts_fasta)
+        extra = [
+            "--num-samples",
+            str(num_samples),
+            "--temperature",
+            str(temperature),
+            "--top-p",
+            str(top_p),
+        ]
+        if max_length is not None:
+            extra += ["--max-length", str(max_length)]
+        if seed is not None:
+            extra += ["--seed", str(seed)]
+        if batch_size is not None:
+            extra += ["--batch-size", str(batch_size)]
+        result, out_dir, keep = self._run(
+            Capability.GENERATE, stage_inputs(records), extra, output_dir, use_gpu
+        )
+        return GenerationResult(result=result, output_dir=out_dir, _keepalive=keep)
 
     # --- internals ---------------------------------------------------------
 
