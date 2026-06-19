@@ -99,9 +99,10 @@ def test_likelihood_end_to_end(model: plms.Model, tmp_path: Path) -> None:
     rows = {row["record_id"]: row for row in result.rows()}
     assert set(rows) == EXPECTED_IDS
     for row in rows.values():
-        assert row["pseudo_perplexity"] > 1.0
-        assert math.isfinite(float(row["pseudo_log_likelihood"]))
+        assert row["perplexity"] > 1.0
+        assert math.isfinite(float(row["log_likelihood"]))
         assert row["seq_len"] > 0
+    assert result.result.params["likelihood_method"] == "masked_marginal"
 
 
 def test_score_masked_marginal_end_to_end(model: plms.Model, tmp_path: Path) -> None:
