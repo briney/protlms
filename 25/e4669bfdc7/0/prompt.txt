@@ -1,0 +1,209 @@
+Let's go with execution option 1 (subagent-driven)
+
+---
+
+<task-notification>
+<task-id>a955ed30dde2a1249</task-id>
+<tool-use-id>toolu_014Uvkj9Y2bGzgdZzS7ZjoSP</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a955ed30dde2a1249.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 1: contract bump" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>---
+
+**Status:** DONE
+
+**Commits created:**
+- `f12417e` contract: bump to 0.2 and add variant_scores_csv artifact kind
+
+**Test summary:** All 55 tests pass (18 contract tests green, 4 docker skipped as expected); all linting/formatting/type checks pass
+
+**Concerns:** None
+
+**Report file:** `/home/briney/git/plms/.superpowers/sdd/task-1-report.md`</result>
+<usage><subagent_tokens>29613</subagent_tokens><tool_uses>23</tool_uses><duration_ms>58453</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aa349d717f55bb21e</task-id>
+<tool-use-id>toolu_01PDDEcgLSEgjGcSfwfuU1my</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/aa349d717f55bb21e.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 1 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I have everything I need. Here is the full review:
+
+---
+
+### Spec Compliance
+
+- `src/plms/contract.py:31` — `CONTRACT_VERSION = "0.2"`. Exact match required. ✅
+- `src/plms/contract.py:53` — `VARIANT_SCORES_CSV = "variant_scores_csv"`. Exact match required. ✅
+- `tests/data/manifest.example.json:2` — `"contract_version": "0.2"`. ✅
+- `tests/data/manifest.example.json:5` — `"capabilities": ["embed", "likelihood", "score"]`. ✅
+- `tests/data/result.embed.example.json:2` — `"contract_version": "0.2"`. ✅
+- `tests/data/result.score.example.json` (new file) — matches the brief's exact JSON shape: `contract_version`, `capability`, `model_name`, `n_input_records`, `n_output_records`, `artifacts` (with `path`, `kind`, `record_ids`), `warnings`, `params`. ✅
+- `tests/test_contract.py:138-139` — version assertion updated to `"0.2"` and `(0, 2)`. ✅
+- `tests/test_contract.py:161` — `Capability.SCORE in manifest.capabilities` assertion added. ✅
+- `tests/test_contract.py:171-174` — `test_documented_score_result_example_validates` added, asserts both `Capability.SCORE` and `"variant_scores_csv"` kind. ✅
+- Backward compatibility: `Capability.SCORE` and `Capability.GENERATE` were already present in the enum (both marked "reserved for a future contract minor version") before this diff — no new capability enum values were required. The existing comment `# reserved for a future contract minor version` on `SCORE` remains, which is now slightly inaccurate since this task activates the score capability at the fixture/contract level. ⚠️ Minor.
+- No `score` logic (runner, CLI, adapter) was added anywhere in the diff. Scope is clean. ✅
+- All five files named in the brief are the only files touched. ✅
+
+---
+
+### Strengths
+
+- Diff is minimal and surgical — exactly the five files specified in the brief, no stray edits.
+- The `result.score.example.json` fixture matches the brief's JSON verbatim, including field ordering and the inline artifact object (compact style with no extra whitespace indentation in the artifact array).
+- `test_documented_score_result_example_validates` tests both the capability identity (`is Capability.SCORE`) and the exact artifact kind string, giving the drift guard real teeth.
+- `test_documented_manifest_example_validates` now has the `contract_version == CONTRACT_VERSION` check (pre-existing) plus both `EMBED` and `SCORE` capability assertions — good belt-and-suspenders for the fixture.
+- All tooling (ruff, ty) reported clean; the commit message follows the project convention.
+
+---
+
+### Issues
+
+#### Minor (Nice to Have)
+
+**`src/plms/contract.py:39` — Stale inline comment on `Capability.SCORE`**
+
+```python
+SCORE = "score"  # reserved for a future contract minor version
+```
+
+This comment was accurate before this task but is now misleading: the contract has been bumped to 0.2 specifically to activate `score`. The comment should be removed or updated (e.g., `# activated in 0.2`). No functional impact, but it will confuse a future reader who sees 0.2 in the version constant and "reserved for a future minor version" on the same enum member.
+
+**`tests/test_contract.py:171-174` — Missing docstring on new test**
+
+`test_documented_result_example_validates` (the existing embed test, line 165) has a docstring:
+```python
+"""The worked example in docs/CONTRACT.md must parse as a Result."""
+```
+The new `test_documented_score_result_example_validates` (line 171) has none. Consistent with the project style (and the brief's docstring-on-all-public-functions rule), it should have one, e.g.:
+```python
+"""The score result example in docs/CONTRACT.md must parse as a Result with score capability."""
+```
+
+---
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** All spec requirements are met exactly — correct version string, correct enum value, all three fixtures updated/created to spec, all required test assertions present, no out-of-scope changes. The two findings are both cosmetic/style-only and do not affect correctness or the drift guard.</result>
+<usage><subagent_tokens>22144</subagent_tokens><tool_uses>3</tool_uses><duration_ms>30529</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a181cb85d51f9fc4a</task-id>
+<tool-use-id>toolu_01ULrbAAVct3XPAFffkUURaw</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a181cb85d51f9fc4a.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 2: io CSV support" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Excellent! Everything is complete and verified. Here's the summary:
+
+---
+
+**Status:** DONE_WITH_CONCERNS
+
+**Commits:**
+- `f4076b4` — io: add CSV staging, column validation, and variant-scores reader
+
+**Test Summary:**
+All 17 tests in test_io.py pass, including 4 new tests (stage_file, check_csv_has_columns ×2, read_variant_scores). Existing test_read_likelihoods_coerces_numeric_columns still passes. Full suite: 57 pass, 4 skipped.
+
+**Concerns:**
+Type checking error in `src/plms/models.py:76` due to `read_likelihoods` return type now including `None` (correct per brief spec). This is expected and will be fixed in Task 3 when `models.py` is updated. Cannot fix here per brief constraint (no modifications outside io.py/test_io.py).
+
+**Report:** `/home/briney/git/plms/.superpowers/sdd/task-2-report.md`</result>
+<usage><subagent_tokens>46571</subagent_tokens><tool_uses>36</tool_uses><duration_ms>135910</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a6e9d1d96198db7c2</task-id>
+<tool-use-id>toolu_01NjatuNQ8H5AAFkWqyL4YQL</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a6e9d1d96198db7c2.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 2 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>### Spec Compliance
+
+- ✅ `stage_file(src: Path, dest_name: str) -&gt; Iterator[StagedInput]` exists at `src/plms/io.py:78–91`. Decorated with `@contextmanager`, correct signature.
+- ✅ `check_csv_has_columns(path: Path, required: Iterable[str]) -&gt; None` exists at `src/plms/io.py:94–104`. Raises `InvalidRequestError` on missing columns.
+- ✅ `read_variant_scores(out_dir: Path, result: Result)` exists at `src/plms/io.py:171–173`. Returns `list[dict[str, str | int | float | None]]`.
+- ✅ `_read_csv_artifact(out_dir, result, kind, column_types)` exists at `src/plms/io.py:135–161`. Private helper with correct signature.
+- ✅ `read_likelihoods` refactored at `src/plms/io.py:164–168` — old inlined CSV loop fully removed, now one-liner delegation to `_read_csv_artifact`.
+- ✅ Blank numeric CSV values → `None` at `src/plms/io.py:156–157`: `if caster is not str and value == "": row[key] = None`.
+- ✅ Non-empty numeric values coerced via column-type map at `src/plms/io.py:159`.
+- ✅ String columns untouched (default `caster = str` path falls through to normal cast, which is a no-op for strings).
+- ✅ `stage_file` copies source under `dest_name`, yields `StagedInput` with `container_input_path == "/in/&lt;dest_name&gt;"`, cleans up on exit — confirmed by test at `tests/test_io.py:191–203`.
+- ✅ Stdlib-only (`csv`, `shutil`, `tempfile`) — no pandas added.
+- ✅ `from __future__ import annotations` present (pre-existing, confirmed in diff context line 23).
+- ✅ `import shutil` added at `src/plms/io.py:26`. `InvalidRequestError` added to exceptions import at line 37.
+- ✅ `_SCORE_COLUMN_TYPES` constant added at `src/plms/io.py:54`.
+- ✅ Four required tests added to `tests/test_io.py:191–246`, matching the brief's prescribed test bodies verbatim.
+- ✅ `test_read_likelihoods_coerces_numeric_columns` still passes (reported GREEN, and the refactoring is a transparent delegation).
+- ⚠️ `ty check` shows `error[invalid-return-type]` in `src/plms/models.py:76` — cross-task item, intentionally out of scope for this task per the brief. Correctly identified and documented in the report.
+
+---
+
+### Strengths
+
+- The `_read_csv_artifact` abstraction is clean and genuinely eliminates the duplicated CSV loop. The old `read_likelihoods` body was 13 lines of inlined logic; it is now a one-liner delegation. No leaky abstraction.
+- Blank-to-`None` guard `if caster is not str and value == ""` is precise — it only fires for columns that have an explicit numeric type mapping, so pure-string columns will never silently become `None` even if they happen to be empty.
+- `check_csv_has_columns` opens only the first line (uses `next(csv.reader(...), [])`) — efficient, no unnecessary full-file read.
+- `stage_file` correctly passes `input_filename=dest_name` when constructing `StagedInput`, so `container_input_path` resolves to `/in/&lt;dest_name&gt;` as required, without any ad-hoc string construction in the function itself.
+- Test `test_stage_file_copies_input_under_dest_name` verifies both the in-context state (file exists, path correct) AND the post-exit cleanup (`not held.exists()`), covering the full lifecycle.
+- Ruff clean, no unrelated files touched, scope discipline is exact.
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+
+None.
+
+#### Important (Should Fix)
+
+- **`tests/test_io.py:224` — leaked tempdir from test setup.** `test_stage_file_copies_input_under_dest_name` creates its own `src` file via `tempfile.mkdtemp()` (line 196) but never cleans up that parent directory. The staged temp dir (`held`) is cleaned up correctly, but the directory created by `mkdtemp()` at line 196 is abandoned after the test. This could accumulate across CI runs. Fix: use `tmp_path` fixture (already available to parametrized tests) or wrap in a `tempfile.TemporaryDirectory` context:
+  ```python
+  def test_stage_file_copies_input_under_dest_name(tmp_path: Path) -&gt; None:
+      from plms.io import stage_file
+      src = tmp_path / "v.csv"
+      ...
+  ```
+  The brief specified this exact pattern with `mkdtemp()` verbatim, so this was inherited from the spec, not an implementer error — but worth fixing now that the task is complete.
+
+- **`src/plms/io.py:141` — `_read_csv_artifact` docstring is a one-liner but the function raises.** The raised `OutputParseError` is undocumented in the docstring. For consistency with `read_likelihoods`'s original docstring (which had `Raises:`) and the project's Google-style requirement, the `Raises:` section should be present:
+  ```python
+  """Read a single CSV artifact, coercing numeric columns (blanks -&gt; None).
+
+  Raises:
+      OutputParseError: If no artifact of the given kind is declared in the result.
+  """
+  ```
+
+#### Minor (Nice to Have)
+
+- **`src/plms/io.py:100` — redundant `Path(path)` call.** The parameter is already typed as `Path`. `Path(path).open(...)` works but is cosmetically redundant — `path.open(...)` is cleaner and consistent with how the rest of the file uses `Path` objects.
+
+- **`tests/test_io.py:228` — removed `import json` from test body.** The brief's prescribed test included `import json` inside the function body (line 52 of the brief). The diff moved it — `json.dumps` is used at line 231 but the import does not appear inside the function. Checking whether `json` is already imported at the top of `tests/test_io.py` would clarify whether this was a safe hoist or an accidental deletion; the tests pass so it must be present, but worth noting the divergence from the brief for auditability.
+
+---
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** All four specified functions are present with correct signatures and behavior; `read_likelihoods` is cleanly refactored with no duplication; blank-to-None logic is correct and precise; the test suite covers all required scenarios including cleanup. The only actionable finding (leaked tempdir) was inherited directly from the brief's prescribed test code and doesn't affect correctness.</result>
+<usage><subagent_tokens>26183</subagent_tokens><tool_uses>3</tool_uses><duration_ms>41642</duration_ms></usage>
+</task-notification>
