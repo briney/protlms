@@ -174,7 +174,11 @@ class Model:
         use_gpu: bool = False,
         batch_size: int | None = None,
     ) -> LikelihoodResult:
-        """Compute pseudo-log-likelihoods for the sequences in ``fasta``.
+        """Compute per-sequence log-likelihoods.
+
+        The scoring method depends on the model: masked-marginal for masked LMs,
+        causal (left-to-right) for autoregressive LMs. The method used is recorded
+        in ``result.json`` under ``params.likelihood_method``.
 
         Raises:
             CapabilityNotSupportedError: If the model does not support likelihoods.

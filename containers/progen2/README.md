@@ -80,5 +80,6 @@ for you.
   same model checkpoint, but are **not** directly comparable to ESM2's
   masked-marginal pseudo-log-likelihood, which uses a different scoring objective
   (masked language modelling).
+- **Temperature**: `--temperature 0` is not a supported strict-greedy mode (the default is 1.0; values ≤ 0 are not documented/validated).
 - The image runs on CPU when launched without `--gpus`, and uses CUDA when
   launched with `--gpus all`.

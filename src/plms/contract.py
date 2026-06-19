@@ -24,7 +24,7 @@ class Capability(StrEnum):
     EMBED = "embed"
     LIKELIHOOD = "likelihood"
     SCORE = "score"  # implemented in contract 0.2
-    GENERATE = "generate"  # reserved for a future contract minor version
+    GENERATE = "generate"  # implemented in contract 0.3
 
 
 class PoolingMode(StrEnum):

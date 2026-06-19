@@ -388,6 +388,7 @@ def cmd_likelihood(args: argparse.Namespace) -> None:
             warnings.append(f"sequence {rid!r} truncated to {MAX_SEQUENCE_LENGTH}")
             seq = seq[:MAX_SEQUENCE_LENGTH]
         ll = _causal_log_likelihood(tokenizer, model, seq, device)
+        # Assumes one token per residue (true for ProGen2 amino-acid vocabulary).
         mean = ll / max(len(seq), 1)
         rows.append(f"{rid},{len(seq)},{ll:.6f},{mean:.6f},{math.exp(-mean):.6f}")
         n_scored += 1
@@ -419,7 +420,7 @@ def _causal_log_likelihood(tokenizer, model, seq: str, device: str) -> float:  #
     control token. It is internally consistent and comparable across sequences
     scored by the same model, but is NOT directly comparable to ESM2's
     masked-marginal pseudo-log-likelihood, which uses a different scoring
-    objective (masked language modelling) and typically includes BOS/EOS tokens.
+    objective (masked language modelling).
 
     Args:
         tokenizer: ProGen2 tokenizers.Tokenizer instance.

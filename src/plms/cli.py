@@ -106,7 +106,7 @@ def likelihood(
     gpu: _GpuOpt = False,
     batch_size: _BatchOpt = None,
 ) -> None:
-    """Compute pseudo-log-likelihoods for sequences in a FASTA file."""
+    """Compute per-sequence log-likelihoods for sequences in a FASTA file."""
     try:
         model_obj = load(model)
         result = model_obj.likelihood(
