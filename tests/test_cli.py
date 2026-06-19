@@ -90,7 +90,15 @@ class FakeModel:
         use_gpu,
         batch_size,
     ):  # noqa: ANN001
-        FakeModel.last_call = {"method": "generate", "num_samples": num_samples, "seed": seed}
+        FakeModel.last_call = {
+            "method": "generate",
+            "num_samples": num_samples,
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_length": max_length,
+            "seed": seed,
+            "use_gpu": use_gpu,
+        }
         return GenerationResult(
             result=_result("generate", [{"path": "generated.fasta", "kind": "generated_fasta"}]),
             output_dir=Path(output_dir),
@@ -217,9 +225,17 @@ def test_generate_command_invokes_model(prompts: Path, tmp_path: Path, monkeypat
             "4",
             "--seed",
             "42",
+            "--temperature",
+            "0.7",
+            "--top-p",
+            "0.95",
+            "--gpu",
         ],
     )
     assert result.exit_code == 0, result.stdout
     assert FakeModel.last_call["method"] == "generate"
     assert FakeModel.last_call["num_samples"] == 4
     assert FakeModel.last_call["seed"] == 42
+    assert FakeModel.last_call["temperature"] == 0.7
+    assert FakeModel.last_call["top_p"] == 0.95
+    assert FakeModel.last_call["use_gpu"] is True
