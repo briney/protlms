@@ -47,3 +47,11 @@ def test_load_from_custom_path(tmp_path: Path) -> None:
     registry = Registry.load(yaml_path)
     assert registry.resolve("t").name == "tiny"
     assert registry.resolve("tiny").image == "example:tiny"
+
+
+def test_resolve_progen2_small() -> None:
+    registry = Registry.load()
+    entry = registry.resolve("progen2-small")
+    assert entry.image == "plms-progen2:small"
+    assert entry.model_family == "progen2"
+    assert registry.resolve("progen2_small") == entry

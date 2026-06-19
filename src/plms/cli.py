@@ -147,6 +147,55 @@ def score(
         _fail(exc)
 
 
+@app.command()
+def generate(
+    model: _ModelArg,
+    prompts: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Prompts FASTA (empty sequence = unconditional).",
+        ),
+    ],
+    output_dir: _OutputOpt,
+    num_samples: Annotated[int, typer.Option("--num-samples", help="Samples per prompt.")] = 1,
+    temperature: Annotated[
+        float, typer.Option("--temperature", help="Sampling temperature.")
+    ] = 1.0,
+    top_p: Annotated[float, typer.Option("--top-p", help="Nucleus sampling probability.")] = 1.0,
+    max_length: Annotated[
+        int | None, typer.Option("--max-length", help="Max sequence length.")
+    ] = None,
+    seed: Annotated[
+        int | None, typer.Option("--seed", help="Random seed for reproducibility.")
+    ] = None,
+    gpu: _GpuOpt = False,
+    batch_size: _BatchOpt = None,
+) -> None:
+    """Generate sequences with an autoregressive model."""
+    try:
+        model_obj = load(model)
+        result = model_obj.generate(
+            prompts,
+            num_samples=num_samples,
+            temperature=temperature,
+            top_p=top_p,
+            max_length=max_length,
+            seed=seed,
+            output_dir=output_dir,
+            use_gpu=gpu,
+            batch_size=batch_size,
+        )
+        console.print(
+            f"[green]generate[/green] complete: {result.result.n_output_records} sequence(s) "
+            f"written to [bold]{output_dir}[/bold]"
+        )
+    except PlmsError as exc:
+        _fail(exc)
+
+
 def _parse_layers(value: str) -> list[int]:
     """Parse a comma-separated layer-index string into a list of ints."""
     try:
