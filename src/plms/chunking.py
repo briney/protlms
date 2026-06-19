@@ -9,19 +9,11 @@ the containers, and ``score`` are unaffected.
 
 from __future__ import annotations
 
-import csv
 import hashlib
-import json
 import logging
-import shutil
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-import numpy as np
-
-from plms.contract import ArtifactKind, OutputArtifact, Result
-from plms.exceptions import FastaError, InvalidRequestError, OutputParseError
-from plms.io import load_pooled_embeddings, read_fasta, read_result
+from plms.exceptions import FastaError, InvalidRequestError
 
 if TYPE_CHECKING:
     from plms.io import FastaRecord

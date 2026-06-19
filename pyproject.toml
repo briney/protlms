@@ -79,8 +79,6 @@ known-first-party = ["plms"]
 # Tests annotate fixtures with types (e.g. pathlib.Path) that are convenient to
 # keep as plain runtime imports rather than moving into TYPE_CHECKING blocks.
 "tests/*" = ["TC001", "TC002", "TC003"]
-# chunking.py imports future task dependencies (merge, orchestration) in advance.
-"src/plms/chunking.py" = ["F401"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
