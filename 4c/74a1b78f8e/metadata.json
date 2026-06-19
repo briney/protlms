@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "4c74a1b78f8e",
+  "strategy": "manual-commit",
+  "branch": "feature/phase1-generate-progen2",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "src/plms/contract.py",
+    "tests/data/manifest.example.json",
+    "tests/data/result.embed.example.json",
+    "tests/test_contract.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/4c/74a1b78f8e/0/metadata.json",
+      "transcript": "/4c/74a1b78f8e/0/full.jsonl",
+      "content_hash": "/4c/74a1b78f8e/0/content_hash.txt",
+      "prompt": "/4c/74a1b78f8e/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 29414,
+    "cache_creation_tokens": 851394,
+    "cache_read_tokens": 74622937,
+    "output_tokens": 363599,
+    "api_call_count": 268
+  }
+}
