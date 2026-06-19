@@ -79,6 +79,10 @@ class FakeRunner:
             self._write_likelihood(out, records)
         elif capability == "score":
             self._write_score(out, spec.input_dir / "variants.csv")
+        elif capability == "generate":
+            records = read_fasta(spec.input_dir / "seqs.fasta")
+            num_samples = int(spec.command[spec.command.index("--num-samples") + 1])
+            self._write_generate(out, records, num_samples)
 
     def _write_embed(self, out: Path, records, pooling: str) -> None:  # noqa: ANN001
         artifacts = []
@@ -98,9 +102,7 @@ class FakeRunner:
         self._write_result(out, "embed", records, artifacts)
 
     def _write_likelihood(self, out: Path, records) -> None:  # noqa: ANN001
-        lines = [
-            "record_id,seq_len,pseudo_log_likelihood,mean_pseudo_log_likelihood,pseudo_perplexity"
-        ]
+        lines = ["record_id,seq_len,log_likelihood,mean_log_likelihood,perplexity"]
         for rec in records:
             lines.append(f"{rec.id},{len(rec.sequence)},-3.5,-0.7,2.01")
         (out / "likelihoods.csv").write_text("\n".join(lines) + "\n")
@@ -129,6 +131,22 @@ class FakeRunner:
                     "artifacts": [{"path": "scores.csv", "kind": "variant_scores_csv"}],
                 }
             )
+        )
+
+    def _write_generate(self, out: Path, records, num_samples: int) -> None:  # noqa: ANN001
+        lines = []
+        out_ids = []
+        for rec in records:
+            for k in range(num_samples):
+                rid = f"{rec.id}__sample{k}"
+                out_ids.append(rid)
+                lines.append(f">{rid}\nACDEFG\n")
+        (out / "generated.fasta").write_text("".join(lines))
+        self._write_result(
+            out,
+            "generate",
+            records,
+            [{"path": "generated.fasta", "kind": "generated_fasta", "record_ids": out_ids}],
         )
 
     def _write_result(self, out: Path, capability: str, records, artifacts) -> None:  # noqa: ANN001
@@ -231,7 +249,7 @@ def test_likelihood_returns_rows(fasta: Path, tmp_path: Path) -> None:
     assert isinstance(result, LikelihoodResult)
     rows = result.rows()
     assert {r["record_id"] for r in rows} == {"seq1", "seq2"}
-    assert rows[0]["pseudo_perplexity"] == pytest.approx(2.01)
+    assert rows[0]["perplexity"] == pytest.approx(2.01)
 
 
 def test_container_error_is_surfaced_with_structured_fields(fasta: Path, tmp_path: Path) -> None:
@@ -306,3 +324,54 @@ def test_score_unsupported_capability_raises(variants_csv: Path, tmp_path: Path)
     model = _load(capabilities=["embed", "likelihood"])  # no score
     with pytest.raises(CapabilityNotSupportedError):
         model.score(variants_csv, output_dir=tmp_path / "sc")
+
+
+@pytest.fixture
+def prompts(tmp_path: Path) -> Path:
+    path = tmp_path / "prompts.fasta"
+    path.write_text(">p1\nACDE\n>uncond\n\n")  # second record is unconditional (empty)
+    return path
+
+
+def test_generate_returns_sequences(prompts: Path, tmp_path: Path) -> None:
+    from plms.models import GenerationResult
+
+    model = _load(capabilities=["embed", "likelihood", "generate"])
+    result = model.generate(prompts, num_samples=2, output_dir=tmp_path / "gen")
+    assert isinstance(result, GenerationResult)
+    seqs = result.sequences()
+    expected_ids = {"p1__sample0", "p1__sample1", "uncond__sample0", "uncond__sample1"}
+    assert {r.id for r in seqs} == expected_ids
+
+
+def test_generate_builds_expected_command(prompts: Path, tmp_path: Path) -> None:
+    model = _load(capabilities=["generate"])
+    model.generate(
+        prompts,
+        num_samples=3,
+        temperature=0.8,
+        top_p=0.9,
+        seed=42,
+        output_dir=tmp_path / "g",
+    )
+    cmd = model._runner.last_spec.command  # type: ignore[attr-defined]
+    assert cmd[0] == "generate"
+    assert cmd[cmd.index("--num-samples") + 1] == "3"
+    assert cmd[cmd.index("--temperature") + 1] == "0.8"
+    assert cmd[cmd.index("--top-p") + 1] == "0.9"
+    assert cmd[cmd.index("--seed") + 1] == "42"
+    assert "--max-length" not in cmd  # omitted when None
+
+
+def test_generate_unsupported_capability_raises(prompts: Path, tmp_path: Path) -> None:
+    model = _load(capabilities=["embed", "likelihood"])
+    with pytest.raises(CapabilityNotSupportedError):
+        model.generate(prompts, output_dir=tmp_path / "g")
+
+
+def test_generate_empty_prompts_raises(tmp_path: Path) -> None:
+    empty = tmp_path / "empty.fasta"
+    empty.write_text("")
+    model = _load(capabilities=["generate"])
+    with pytest.raises(InvalidRequestError):
+        model.generate(empty, output_dir=tmp_path / "g")

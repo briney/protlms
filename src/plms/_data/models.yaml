@@ -13,3 +13,7 @@ models:
     aliases: [esm2_t33_650M]
     image: plms-esm2:t33_650M
     model_family: esm2
+  - name: progen2-small
+    aliases: [progen2_small]
+    image: plms-progen2:small
+    model_family: progen2

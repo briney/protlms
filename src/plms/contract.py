@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict
 from plms.exceptions import ContractVersionError
 
 #: The contract version this client speaks (``MAJOR.MINOR``).
-CONTRACT_VERSION = "0.2"
+CONTRACT_VERSION = "0.3"
 
 
 class Capability(StrEnum):
@@ -24,7 +24,7 @@ class Capability(StrEnum):
     EMBED = "embed"
     LIKELIHOOD = "likelihood"
     SCORE = "score"  # implemented in contract 0.2
-    GENERATE = "generate"  # reserved for a future contract minor version
+    GENERATE = "generate"  # implemented in contract 0.3
 
 
 class PoolingMode(StrEnum):
@@ -43,6 +43,7 @@ class ArtifactKind(StrEnum):
     PER_RESIDUE_EMBEDDINGS = "per_residue_embeddings"
     LIKELIHOODS_CSV = "likelihoods_csv"
     VARIANT_SCORES_CSV = "variant_scores_csv"
+    GENERATED_FASTA = "generated_fasta"
 
 
 class Manifest(BaseModel):

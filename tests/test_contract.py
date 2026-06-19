@@ -39,8 +39,8 @@ def _manifest_dict() -> dict:
 
 
 def test_contract_version_is_semantic_string() -> None:
-    assert CONTRACT_VERSION == "0.2"
-    assert parse_contract_version(CONTRACT_VERSION) == (0, 2)
+    assert CONTRACT_VERSION == "0.3"
+    assert parse_contract_version(CONTRACT_VERSION) == (0, 3)
 
 
 def test_manifest_round_trip() -> None:
@@ -156,6 +156,13 @@ def test_documented_score_result_example_validates() -> None:
     result = Result.model_validate_json((_DATA / "result.score.example.json").read_text())
     assert result.capability is Capability.SCORE
     assert result.artifacts[0].kind == "variant_scores_csv"
+
+
+def test_documented_generate_result_example_validates() -> None:
+    """The generate result example in docs/CONTRACT.md must parse as a Result."""
+    result = Result.model_validate_json((_DATA / "result.generate.example.json").read_text())
+    assert result.capability is Capability.GENERATE
+    assert result.artifacts[0].kind == "generated_fasta"
 
 
 def test_container_execution_error_carries_structured_fields() -> None:

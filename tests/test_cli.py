@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 from plms.cli import app
 from plms.contract import Manifest, Result
 from plms.exceptions import ModelNotFoundError
-from plms.models import EmbeddingResult, LikelihoodResult, ScoreResult
+from plms.models import EmbeddingResult, GenerationResult, LikelihoodResult, ScoreResult
 
 runner = CliRunner()
 
@@ -77,6 +77,33 @@ class FakeModel:
             method=method,
         )
 
+    def generate(
+        self,
+        prompts,
+        *,
+        num_samples,
+        temperature,
+        top_p,
+        max_length,
+        seed,
+        output_dir,
+        use_gpu,
+        batch_size,
+    ):  # noqa: ANN001
+        FakeModel.last_call = {
+            "method": "generate",
+            "num_samples": num_samples,
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_length": max_length,
+            "seed": seed,
+            "use_gpu": use_gpu,
+        }
+        return GenerationResult(
+            result=_result("generate", [{"path": "generated.fasta", "kind": "generated_fasta"}]),
+            output_dir=Path(output_dir),
+        )
+
 
 @pytest.fixture
 def fasta(tmp_path: Path) -> Path:
@@ -89,6 +116,13 @@ def fasta(tmp_path: Path) -> Path:
 def variants_csv(tmp_path: Path) -> Path:
     path = tmp_path / "variants.csv"
     path.write_text("variant_id,wt_sequence,mutant\nv1,ACDE,A1G\n")
+    return path
+
+
+@pytest.fixture
+def prompts(tmp_path: Path) -> Path:
+    path = tmp_path / "prompts.fasta"
+    path.write_text(">p1\nACDE\n")
     return path
 
 
@@ -175,3 +209,33 @@ def test_score_command_default_method(variants_csv: Path, tmp_path: Path, monkey
     )
     assert result.exit_code == 0, result.stdout
     assert FakeModel.last_call["scoring_method"] == "masked-marginal"
+
+
+def test_generate_command_invokes_model(prompts: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "progen2-small",
+            str(prompts),
+            "-o",
+            str(tmp_path / "out"),
+            "--num-samples",
+            "4",
+            "--seed",
+            "42",
+            "--temperature",
+            "0.7",
+            "--top-p",
+            "0.95",
+            "--gpu",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert FakeModel.last_call["method"] == "generate"
+    assert FakeModel.last_call["num_samples"] == 4
+    assert FakeModel.last_call["seed"] == 42
+    assert FakeModel.last_call["temperature"] == 0.7
+    assert FakeModel.last_call["top_p"] == 0.95
+    assert FakeModel.last_call["use_gpu"] is True

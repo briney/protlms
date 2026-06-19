@@ -28,9 +28,9 @@ STAGED_FASTA_NAME = "seqs.fasta"
 #: Numeric columns in the likelihoods CSV and the type to coerce them to.
 _LIKELIHOOD_COLUMN_TYPES: dict[str, type] = {
     "seq_len": int,
-    "pseudo_log_likelihood": float,
-    "mean_pseudo_log_likelihood": float,
-    "pseudo_perplexity": float,
+    "log_likelihood": float,
+    "mean_log_likelihood": float,
+    "perplexity": float,
 }
 
 #: Numeric columns in the variant scores CSV and the type to coerce them to.
@@ -247,6 +247,18 @@ def read_likelihoods(out_dir: Path, result: Result) -> list[dict[str, str | int 
     return _read_csv_artifact(
         out_dir, result, ArtifactKind.LIKELIHOODS_CSV, _LIKELIHOOD_COLUMN_TYPES
     )
+
+
+def read_generated(out_dir: Path, result: Result) -> list[FastaRecord]:
+    """Load generated sequences from the ``generated_fasta`` artifact.
+
+    Raises:
+        OutputParseError: If no generated_fasta artifact is present.
+    """
+    artifacts = _artifacts(result, ArtifactKind.GENERATED_FASTA)
+    if not artifacts:
+        raise OutputParseError("result declares no generated_fasta artifact")
+    return read_fasta(out_dir / artifacts[0].path)
 
 
 def read_variant_scores(out_dir: Path, result: Result) -> list[dict[str, str | int | float | None]]:
