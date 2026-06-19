@@ -155,3 +155,23 @@ def test_plms_error_reported_cleanly_with_exit_1(fasta: Path, tmp_path: Path, mo
     assert "unknown model" in result.stdout
     # a clean message, not a raw traceback
     assert "Traceback" not in result.stdout
+
+
+def test_score_plms_error_reported_cleanly(variants_csv: Path, tmp_path: Path, monkeypatch) -> None:
+    def boom(name, **kw):  # noqa: ANN001, ANN003
+        raise ModelNotFoundError("unknown model 'nope'")
+
+    monkeypatch.setattr("plms.cli.load", boom)
+    result = runner.invoke(app, ["score", "nope", str(variants_csv), "-o", str(tmp_path / "out")])
+    assert result.exit_code == 1
+    assert "unknown model" in result.stdout
+    assert "Traceback" not in result.stdout
+
+
+def test_score_command_default_method(variants_csv: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    result = runner.invoke(
+        app, ["score", "esm2-8m", str(variants_csv), "-o", str(tmp_path / "out")]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert FakeModel.last_call["scoring_method"] == "masked-marginal"

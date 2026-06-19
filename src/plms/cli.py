@@ -141,7 +141,7 @@ def score(
         )
         console.print(
             f"[green]score[/green] complete: {result.result.n_output_records} variant(s) "
-            f"written to [bold]{output_dir}[/bold]  method={method}"
+            f"written to [bold]{output_dir}[/bold] method={method}"
         )
     except PlmsError as exc:
         _fail(exc)
