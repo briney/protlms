@@ -895,3 +895,11 @@ out_rows.append(f"{row['variant_id']},{row['mutant']},{n_mut},{score_str}")
 **Report:** `/home/briney/git/plms/.superpowers/sdd/final-fix-report.md`</result>
 <usage><subagent_tokens>36684</subagent_tokens><tool_uses>18</tool_uses><duration_ms>120643</duration_ms></usage>
 </task-notification>
+
+---
+
+PR merged and branch deleted on origin. Switch back to main and let's get started on the next sub-project: generate + ProGen2
+
+---
+
+Looks good, proceed
