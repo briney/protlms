@@ -456,3 +456,56 @@ The implementation matches the task brief exactly and in detail.
 **Approved.** The implementation is spec-complete, gated correctly, and all five assertions are substantive and tightly map to the acceptance criteria. The integration test validates the full end-to-end path (manifest, embed pooled/per-residue, likelihood with method, score with mutations) without stray edits or vacuous checks. The implementer's report confirms 5/5 pass, 117 unit tests pass, and ruff/ty clean—no regressions.</result>
 <usage><subagent_tokens>24048</subagent_tokens><tool_uses>3</tool_uses><duration_ms>14794</duration_ms></usage>
 </task-notification>
+
+---
+
+<task-notification>
+<task-id>a37ce7e37fc7c0aab</task-id>
+<tool-use-id>toolu_01BzXj5j7ZarctrbtBawE5jF</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a37ce7e37fc7c0aab.output</output-file>
+<status>completed</status>
+<summary>Agent "Final whole-branch review (ESM-C)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All findings confirmed. I have a complete picture. Here is my review.
+
+---
+
+### Strengths
+
+- **Zero client production-code change goal: verified clean.** `git diff --stat d9e9064..7558a1d -- src/plms/` shows only `_data/models.yaml` (8 insertions). `contract.py`, `models.py`, `io.py`, `cli.py`, `runner.py`, `registry.py` are untouched. The integration relies entirely on the existing generic client plus a registry entry — exactly the architecture the project is built around.
+- **Faithful adaptation of the ESM2 reference.** `containers/esm-c/entrypoint.py` mirrors `containers/esm2/entrypoint.py` structure-for-structure: identical pure-helper set, `_write_capability_result`, `emit_error_and_exit`, argparse layout, BOS/EOS slicing (`emb[1 : 1 + len(seq)]`, cls = index 0), and the masked-marginal PLL loop. A maintainer who knows ESM2 will read this in minutes.
+- **Contract compliance is exact.** result.json payloads match `docs/CONTRACT.md`: `score` writes `params:{"method": ...}` (matches the worked example at CONTRACT.md:247), `likelihood` writes `params.likelihood_method="masked_marginal"` (CONTRACT.md:158), artifact `kind` values are all in the known set, and `ContainerError` uses the documented `error_type` vocabulary (`InvalidInput`, `DeviceUnavailable`, `InternalError`). `params` values are all strings, satisfying `Result.params: dict[str,str]`.
+- **Correctness of masked-marginal / variant scoring is real-data-proven.** Integration assertions are genuine: melittin = 26 residues (matches the `(26, 960)` shape assertion), `self`=`M1M` self-substitution → score ≈ 0.0 / n_mutations=1, `double`=`M1L:T2A` → n_mutations=2. The client's `read_variant_scores` coerces `n_mutations`→int, `score`→float (io.py:37), so those assertions test parsed behavior, not strings. The 5/5 green run proves the esm 3.2.3 forward surface (`.embeddings (B,T,960)`, `.sequence_logits (B,T,64)`, `mask_token_id=32`) matches the entrypoint.
+- **Production readiness:** weights baked at build via `_prefetch`, `HF_HUB_OFFLINE=1` enforced at runtime, top-level `except` converts any failure into a structured `InternalError`, `pick_device` validates explicit `cuda` requests. The kwarg-drift blocker (`use_flash_attn`) was correctly resolved — confirmed absent from the actual `entrypoint.py`.
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+None. The deviations from the spec (table-driven manifest dims, `max_sequence_length=2048`, embed restricted to layer `-1`) are all explicitly documented in the plan's "Deviations from the spec" section and are sound. I found no undocumented deviation.
+
+#### Minor (Nice to Have)
+- `containers/esm-c/README.md:57` — last Notes bullet is 150 chars (renders as one long line on GitHub). Wrap to ≤100. (ledger item)
+- `containers/esm-c/entrypoint.py:171` — `load_model` docstring still says "(flash-attn disabled)"; accurate but stale phrasing now that the kwarg is gone. Reword to "(flash-attn not installed)" or drop. (ledger item)
+- `containers/esm-c/entrypoint.py` `cmd_embed` — pooled path doesn't `mkdir` `output_dir`; harmless because `/out` is always mounted. Inherited from ESM2. (ledger item)
+- `cmd_score` truncation uses a fixed `"&lt;wt&gt;"` label, non-informative when multiple WT sequences truncate. Inherited from ESM2. (ledger item)
+- `perplexity_from_mean` lazy-imports `math`; cosmetic, matches ESM2. (ledger item)
+- README header HF link is 300m-specific though the doc covers both checkpoints. (ledger item)
+- `tests/test_integration_esmc.py` self-variant approx assertion could use a one-line clarifying comment. (ledger item)
+- Note (not in ledger, non-blocking): the **plan doc** (`...plans/2026-06-19-esm-c-container.md`) still shows `use_flash_attn=False` in its embedded code at lines ~1034 and ~1283 — stale vs. the shipped fix (ff980bd). Doc-only; the real entrypoint is correct. Worth a one-line note in the plan if you keep these docs as living references, but not merge-relevant.
+
+### Recommendations
+- Roll the two cleanest ledger Minors (README:57 line-wrap, entrypoint:171 docstring) into a single trivial follow-up commit if convenient, but they don't gate merge.
+- Consider a future enhancement ticket for arbitrary-layer embed support (currently `-1` only) — already flagged as out-of-scope in the plan.
+
+### Assessment
+
+**Ready to merge? Yes.**
+
+The branch fully satisfies its spec and plan: zero client production-code change (verified), clean ESM2-pattern adaptation, exact contract compliance, and all inference paths proven by a real 5/5 gated Docker integration run plus 117-passing unit suite with ruff/ty clean. Correctness of the masked-marginal likelihood, variant scoring, and BOS/EOS slicing is validated against real sequences.
+
+**Ledger Minor roll-up triage: defer all to backlog — none are merge-blocking.** Every item is cosmetic (doc wording, line length, an inherited harmless mkdir-omission, a lazy import) and most are inherited verbatim from the already-shipped ESM2 reference, so they don't represent new risk. The one extra item I found (stale `use_flash_attn` in the *plan doc*) is doc-only and also defer-to-backlog.</result>
+<usage><subagent_tokens>82768</subagent_tokens><tool_uses>11</tool_uses><duration_ms>93726</duration_ms></usage>
+</task-notification>
