@@ -120,6 +120,33 @@ def likelihood(
         _fail(exc)
 
 
+@app.command()
+def score(
+    model: _ModelArg,
+    variants: Annotated[
+        Path, typer.Argument(exists=True, dir_okay=False, readable=True, help="Variants CSV.")
+    ],
+    output_dir: _OutputOpt,
+    method: Annotated[
+        str, typer.Option("--method", help="Scoring method: masked-marginal or wt-marginal.")
+    ] = "masked-marginal",
+    gpu: _GpuOpt = False,
+    batch_size: _BatchOpt = None,
+) -> None:
+    """Score sequence variants for effect."""
+    try:
+        model_obj = load(model)
+        result = model_obj.score(
+            variants, method=method, output_dir=output_dir, use_gpu=gpu, batch_size=batch_size
+        )
+        console.print(
+            f"[green]score[/green] complete: {result.result.n_output_records} variant(s) "
+            f"written to [bold]{output_dir}[/bold] method={method}"
+        )
+    except PlmsError as exc:
+        _fail(exc)
+
+
 def _parse_layers(value: str) -> list[int]:
     """Parse a comma-separated layer-index string into a list of ints."""
     try:

@@ -23,6 +23,7 @@ IMAGE = "plms-esm2:t6_8M"
 EMBEDDING_DIM = 320
 REPO_ROOT = Path(__file__).parents[1]
 TINY_FASTA = REPO_ROOT / "tests" / "data" / "tiny.fasta"
+VARIANTS_CSV = REPO_ROOT / "tests" / "data" / "variants.csv"
 EXPECTED_IDS = {"insulin_b", "gb1", "melittin"}
 
 
@@ -101,3 +102,27 @@ def test_likelihood_end_to_end(model: plms.Model, tmp_path: Path) -> None:
         assert row["pseudo_perplexity"] > 1.0
         assert math.isfinite(float(row["pseudo_log_likelihood"]))
         assert row["seq_len"] > 0
+
+
+def test_score_masked_marginal_end_to_end(model: plms.Model, tmp_path: Path) -> None:
+    result = model.score(VARIANTS_CSV, method="masked-marginal", output_dir=tmp_path / "sc")
+    rows = {r["variant_id"]: r for r in result.rows()}
+    assert set(rows) == {"self", "single", "double"}
+    # a self-substitution must score exactly 0
+    assert rows["self"]["score"] == pytest.approx(0.0, abs=1e-5)
+    assert rows["self"]["n_mutations"] == 1
+    assert rows["double"]["n_mutations"] == 2
+    assert math.isfinite(float(rows["single"]["score"]))
+
+
+def test_score_wt_marginal_runs(model: plms.Model, tmp_path: Path) -> None:
+    result = model.score(VARIANTS_CSV, method="wt-marginal", output_dir=tmp_path / "sc")
+    rows = {r["variant_id"]: r for r in result.rows()}
+    assert set(rows) == {"self", "single", "double"}
+    assert rows["self"]["score"] == pytest.approx(0.0, abs=1e-5)
+    assert math.isfinite(float(rows["single"]["score"]))
+    assert math.isfinite(float(rows["double"]["score"]))
+
+
+def test_manifest_now_declares_score(model: plms.Model) -> None:
+    assert "score" in {c.value for c in model.manifest.capabilities}

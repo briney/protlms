@@ -7,6 +7,7 @@ imported only to load result arrays produced by containers.
 from __future__ import annotations
 
 import csv
+import shutil
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -16,7 +17,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from plms.contract import ArtifactKind, Result
-from plms.exceptions import FastaError, OutputParseError
+from plms.exceptions import FastaError, InvalidRequestError, OutputParseError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -31,6 +32,9 @@ _LIKELIHOOD_COLUMN_TYPES: dict[str, type] = {
     "mean_pseudo_log_likelihood": float,
     "pseudo_perplexity": float,
 }
+
+#: Numeric columns in the variant scores CSV and the type to coerce them to.
+_SCORE_COLUMN_TYPES: dict[str, type] = {"n_mutations": int, "score": float}
 
 
 @dataclass(frozen=True)
@@ -132,6 +136,36 @@ def stage_inputs(records: list[FastaRecord]) -> Iterator[StagedInput]:
         yield StagedInput(input_dir=input_dir)
 
 
+@contextmanager
+def stage_file(src: Path, dest_name: str) -> Iterator[StagedInput]:
+    """Stage an arbitrary input file into a temporary directory bound at /in.
+
+    Args:
+        src: The host file to stage.
+        dest_name: The filename it should have inside the input directory.
+
+    Yields:
+        A :class:`StagedInput` pointing at the host input directory.
+    """
+    with tempfile.TemporaryDirectory(prefix="plms-in-") as tmp:
+        input_dir = Path(tmp)
+        shutil.copyfile(src, input_dir / dest_name)
+        yield StagedInput(input_dir=input_dir, input_filename=dest_name)
+
+
+def check_csv_has_columns(path: Path, required: Iterable[str]) -> None:
+    """Validate that a CSV file's header contains all required columns.
+
+    Raises:
+        InvalidRequestError: If any required column is absent.
+    """
+    with path.open(newline="") as handle:
+        header = next(csv.reader(handle), [])
+    missing = [column for column in required if column not in header]
+    if missing:
+        raise InvalidRequestError(f"variants CSV {path} is missing column(s): {missing}")
+
+
 def read_result(out_dir: Path) -> Result:
     """Load and parse ``result.json`` from a container's output directory.
 
@@ -180,21 +214,41 @@ def load_per_residue_embeddings(out_dir: Path, result: Result) -> dict[str, np.n
     return out
 
 
-def read_likelihoods(out_dir: Path, result: Result) -> list[dict[str, str | int | float]]:
-    """Read the likelihoods CSV, coercing known numeric columns.
+def _read_csv_artifact(
+    out_dir: Path,
+    result: Result,
+    kind: ArtifactKind,
+    column_types: dict[str, type],
+) -> list[dict[str, str | int | float | None]]:
+    """Read a single CSV artifact, coercing numeric columns (blanks -> None).
 
     Raises:
-        OutputParseError: If no likelihoods artifact is present.
+        OutputParseError: If the result declares no artifact of the given kind.
     """
-    artifacts = _artifacts(result, ArtifactKind.LIKELIHOODS_CSV)
+    artifacts = _artifacts(result, kind)
     if not artifacts:
-        raise OutputParseError("result declares no likelihoods_csv artifact")
-    rows: list[dict[str, str | int | float]] = []
+        raise OutputParseError(f"result declares no {kind.value} artifact")
+    rows: list[dict[str, str | int | float | None]] = []
     with (out_dir / artifacts[0].path).open(newline="") as handle:
         for raw_row in csv.DictReader(handle):
-            row: dict[str, str | int | float] = {}
+            row: dict[str, str | int | float | None] = {}
             for key, value in raw_row.items():
-                caster = _LIKELIHOOD_COLUMN_TYPES.get(key, str)
-                row[key] = caster(value)
+                caster = column_types.get(key, str)
+                if caster is not str and value == "":
+                    row[key] = None
+                else:
+                    row[key] = caster(value)
             rows.append(row)
     return rows
+
+
+def read_likelihoods(out_dir: Path, result: Result) -> list[dict[str, str | int | float | None]]:
+    """Read the likelihoods CSV, coercing known numeric columns."""
+    return _read_csv_artifact(
+        out_dir, result, ArtifactKind.LIKELIHOODS_CSV, _LIKELIHOOD_COLUMN_TYPES
+    )
+
+
+def read_variant_scores(out_dir: Path, result: Result) -> list[dict[str, str | int | float | None]]:
+    """Read the variant scores CSV (blank score => None for invalid rows)."""
+    return _read_csv_artifact(out_dir, result, ArtifactKind.VARIANT_SCORES_CSV, _SCORE_COLUMN_TYPES)

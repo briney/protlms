@@ -190,3 +190,59 @@ def test_read_likelihoods_coerces_numeric_columns(tmp_path: Path) -> None:
     assert rows[0]["record_id"] == "seq1"
     assert rows[0]["seq_len"] == 5
     assert rows[0]["pseudo_perplexity"] == pytest.approx(2.01)
+
+
+def test_stage_file_copies_input_under_dest_name(tmp_path: Path) -> None:
+    from plms.io import stage_file
+
+    src = tmp_path / "v.csv"
+    src.write_text("variant_id,wt_sequence,mutant\nv1,ACDE,A1G\n")
+    with stage_file(src, "variants.csv") as job:
+        staged = job.input_dir / "variants.csv"
+        assert staged.is_file()
+        assert job.container_input_path == "/in/variants.csv"
+        held = job.input_dir
+    assert not held.exists()
+
+
+def test_check_csv_has_columns_ok(tmp_path: Path) -> None:
+    from plms.io import check_csv_has_columns
+
+    p = tmp_path / "v.csv"
+    p.write_text("variant_id,wt_sequence,mutant\nv1,ACDE,A1G\n")
+    check_csv_has_columns(p, ["variant_id", "wt_sequence", "mutant"])  # must not raise
+
+
+def test_check_csv_has_columns_missing_raises(tmp_path: Path) -> None:
+    from plms.exceptions import InvalidRequestError
+    from plms.io import check_csv_has_columns
+
+    p = tmp_path / "v.csv"
+    p.write_text("variant_id,mutant\nv1,A1G\n")
+    with pytest.raises(InvalidRequestError):
+        check_csv_has_columns(p, ["variant_id", "wt_sequence", "mutant"])
+
+
+def test_read_variant_scores_coerces_and_handles_blanks(tmp_path: Path) -> None:
+    from plms.io import read_result, read_variant_scores
+
+    (tmp_path / "scores.csv").write_text(
+        "variant_id,mutant,n_mutations,score\nself,M1M,1,0.0\nbad,Z9Q,1,\n"
+    )
+    (tmp_path / "result.json").write_text(
+        json.dumps(
+            {
+                "contract_version": "0.2",
+                "capability": "score",
+                "model_name": "m",
+                "n_input_records": 2,
+                "n_output_records": 2,
+                "artifacts": [{"path": "scores.csv", "kind": "variant_scores_csv"}],
+            }
+        )
+    )
+    rows = read_variant_scores(tmp_path, read_result(tmp_path))
+    assert rows[0]["variant_id"] == "self"
+    assert rows[0]["n_mutations"] == 1
+    assert rows[0]["score"] == 0.0
+    assert rows[1]["score"] is None  # blank score for an invalid row

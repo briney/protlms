@@ -28,7 +28,7 @@ def _manifest_json(**overrides) -> str:
         "version": "1.0.0",
         "description": "ESM2 8M.",
         "model_family": "esm2",
-        "capabilities": ["embed", "likelihood"],
+        "capabilities": ["embed", "likelihood", "score"],
         "embedding_dim": EMBEDDING_DIM,
         "max_sequence_length": 1024,
         "pooling_modes": ["mean", "cls", "none"],
@@ -68,14 +68,17 @@ class FakeRunner:
         return RunResult(exit_code=0, stdout="", stderr="", argv=argv)
 
     def _write_outputs(self, spec: RunSpec) -> None:
-        records = read_fasta(spec.input_dir / "seqs.fasta")
         out = spec.output_dir
         capability = spec.command[0]
         if capability == "embed":
+            records = read_fasta(spec.input_dir / "seqs.fasta")
             pooling = spec.command[spec.command.index("--pooling") + 1]
             self._write_embed(out, records, pooling)
         elif capability == "likelihood":
+            records = read_fasta(spec.input_dir / "seqs.fasta")
             self._write_likelihood(out, records)
+        elif capability == "score":
+            self._write_score(out, spec.input_dir / "variants.csv")
 
     def _write_embed(self, out: Path, records, pooling: str) -> None:  # noqa: ANN001
         artifacts = []
@@ -103,6 +106,29 @@ class FakeRunner:
         (out / "likelihoods.csv").write_text("\n".join(lines) + "\n")
         self._write_result(
             out, "likelihood", records, [{"path": "likelihoods.csv", "kind": "likelihoods_csv"}]
+        )
+
+    def _write_score(self, out: Path, variants_csv: Path) -> None:
+        import csv as _csv
+
+        with variants_csv.open(newline="") as handle:
+            rows = list(_csv.DictReader(handle))
+        lines = ["variant_id,mutant,n_mutations,score"]
+        for r in rows:
+            n = len(r["mutant"].split(":"))
+            lines.append(f"{r['variant_id']},{r['mutant']},{n},-1.5")
+        (out / "scores.csv").write_text("\n".join(lines) + "\n")
+        (out / "result.json").write_text(
+            json.dumps(
+                {
+                    "contract_version": "0.2",
+                    "capability": "score",
+                    "model_name": "esm2_t6_8M",
+                    "n_input_records": len(rows),
+                    "n_output_records": len(rows),
+                    "artifacts": [{"path": "scores.csv", "kind": "variant_scores_csv"}],
+                }
+            )
         )
 
     def _write_result(self, out: Path, capability: str, records, artifacts) -> None:  # noqa: ANN001
@@ -231,3 +257,52 @@ def test_embed_without_output_dir_keeps_results_available(fasta: Path) -> None:
     result = model.embed(fasta, pooling="mean")  # no output_dir
     pooled = result.pooled()  # temp dir must still be alive
     assert set(pooled) == {"seq1", "seq2"}
+
+
+@pytest.fixture
+def variants_csv(tmp_path: Path) -> Path:
+    path = tmp_path / "variants.csv"
+    path.write_text("variant_id,wt_sequence,mutant\nself,ACDEFGHIK,A1A\nsingle,ACDEFGHIK,C2A\n")
+    return path
+
+
+def test_score_returns_rows(variants_csv: Path, tmp_path: Path) -> None:
+    from plms.models import ScoreResult
+
+    model = _load()
+    result = model.score(variants_csv, output_dir=tmp_path / "sc")
+    assert isinstance(result, ScoreResult)
+    rows = {r["variant_id"]: r for r in result.rows()}
+    assert set(rows) == {"self", "single"}
+    assert rows["single"]["n_mutations"] == 1
+
+
+def test_score_builds_expected_command(variants_csv: Path, tmp_path: Path) -> None:
+    model = _load()
+    model.score(variants_csv, method="wt-marginal", output_dir=tmp_path / "sc")
+    cmd = model._runner.last_spec.command  # type: ignore[attr-defined]
+    assert cmd[0] == "score"
+    assert cmd[cmd.index("--input") + 1] == "/in/variants.csv"
+    assert cmd[cmd.index("--method") + 1] == "wt-marginal"
+
+
+def test_score_invalid_method_raises_before_run(variants_csv: Path, tmp_path: Path) -> None:
+    model = _load()
+    with pytest.raises(InvalidRequestError):
+        model.score(variants_csv, method="bogus", output_dir=tmp_path / "sc")
+    assert model._runner.last_spec is None  # type: ignore[attr-defined]
+
+
+def test_score_missing_columns_raises(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.csv"
+    bad.write_text("variant_id,mutant\nv1,A1G\n")
+    model = _load()
+    with pytest.raises(InvalidRequestError):
+        model.score(bad, output_dir=tmp_path / "sc")
+    assert model._runner.last_spec is None  # type: ignore[attr-defined]
+
+
+def test_score_unsupported_capability_raises(variants_csv: Path, tmp_path: Path) -> None:
+    model = _load(capabilities=["embed", "likelihood"])  # no score
+    with pytest.raises(CapabilityNotSupportedError):
+        model.score(variants_csv, output_dir=tmp_path / "sc")
