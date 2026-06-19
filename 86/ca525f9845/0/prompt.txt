@@ -509,3 +509,34 @@ The branch fully satisfies its spec and plan: zero client production-code change
 **Ledger Minor roll-up triage: defer all to backlog — none are merge-blocking.** Every item is cosmetic (doc wording, line length, an inherited harmless mkdir-omission, a lazy import) and most are inherited verbatim from the already-shipped ESM2 reference, so they don't represent new risk. The one extra item I found (stale `use_flash_attn` in the *plan doc*) is doc-only and also defer-to-backlog.</result>
 <usage><subagent_tokens>82768</subagent_tokens><tool_uses>11</tool_uses><duration_ms>93726</duration_ms></usage>
 </task-notification>
+
+---
+
+push and create a PR
+
+---
+
+<task-notification>
+<task-id>af77bf5db35bdce8e</task-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/af77bf5db35bdce8e.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 4: ESM-C integration test" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This is just a notification that the background wait-loop command was stopped (it was the helper that polled for the `EXIT:` marker — no longer needed since the integration tests already completed with EXIT:0). No action required.
+
+The task is complete. All work is done and committed:
+- Integration test: 5/5 passed (EXIT:0)
+- Full unit suite: 117 passed, 16 skipped
+- ruff check, ruff format, ty check: all clean
+- Commit `7558a1d` created
+- Report written to `/home/briney/git/plms/.superpowers/sdd/task-4-report.md`</result>
+<usage><subagent_tokens>58891</subagent_tokens><tool_uses>37</tool_uses><duration_ms>4348771</duration_ms></usage>
+</task-notification>
+
+---
+
+PR merged and branch deleted. switch back to main and lets do the last remaining Phase 1 item: input chunking
+
+---
+
+no changes
