@@ -56,3 +56,18 @@ def test_perplexity_from_mean() -> None:
     # mean log-likelihood of 0 => perplexity 1.0
     assert entrypoint.perplexity_from_mean(0.0) == pytest.approx(1.0)
     assert entrypoint.perplexity_from_mean(-1.0) == pytest.approx(2.718281828, rel=1e-6)
+
+
+def test_parse_mutant_single_and_multi() -> None:
+    assert entrypoint.parse_mutant("A24G") == [("A", 24, "G")]
+    assert entrypoint.parse_mutant("A24G:T56S") == [("A", 24, "G"), ("T", 56, "S")]
+
+
+def test_parse_mutant_self_substitution() -> None:
+    assert entrypoint.parse_mutant("M1M") == [("M", 1, "M")]
+
+
+@pytest.mark.parametrize("bad", ["", "24G", "AG", "A2", "AxG", "A-1G"])
+def test_parse_mutant_malformed_raises(bad: str) -> None:
+    with pytest.raises(ValueError):
+        entrypoint.parse_mutant(bad)

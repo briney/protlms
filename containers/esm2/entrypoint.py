@@ -20,12 +20,13 @@ import re
 import sys
 from pathlib import Path
 
-CONTRACT_VERSION = "0.1"
+CONTRACT_VERSION = "0.2"
 MAX_SEQUENCE_LENGTH = 1024
 DEFAULT_BATCH_SIZE = 8
 DEFAULT_CHECKPOINT = os.environ.get("ESM2_CHECKPOINT", "esm2_t6_8M")
 
 _ID_SAFE = re.compile(r"[^A-Za-z0-9._-]")
+_MUTANT_RE = re.compile(r"^([A-Za-z])(\d+)([A-Za-z])$")
 
 
 # --- pure helpers (unit-testable without torch) ----------------------------
@@ -86,6 +87,30 @@ def perplexity_from_mean(mean_log_likelihood: float) -> float:
     return math.exp(-mean_log_likelihood)
 
 
+def parse_mutant(mutant: str) -> list[tuple[str, int, str]]:
+    """Parse a mutation string like ``A24G`` or ``A24G:T56S`` (1-indexed)."""
+    subs: list[tuple[str, int, str]] = []
+    for token in mutant.split(":"):
+        match = _MUTANT_RE.match(token.strip())
+        if not match:
+            raise ValueError(f"invalid mutation token {token!r}")
+        subs.append((match.group(1).upper(), int(match.group(2)), match.group(3).upper()))
+    return subs
+
+
+def _valid_positions(group: list[dict], wt_seq: str) -> set[int]:
+    """Collect in-range mutated positions across a WT group (for logit computation)."""
+    positions: set[int] = set()
+    for row in group:
+        try:
+            for _wt, pos, _mut in parse_mutant(row["mutant"]):
+                if 1 <= pos <= len(wt_seq):
+                    positions.add(pos)
+        except ValueError:
+            continue
+    return positions
+
+
 # --- contract I/O ----------------------------------------------------------
 
 
@@ -144,7 +169,7 @@ def build_manifest() -> dict:
         "version": "1.0.0",
         "description": f"ESM2 masked protein language model ({DEFAULT_CHECKPOINT}).",
         "model_family": "esm2",
-        "capabilities": ["embed", "likelihood"],
+        "capabilities": ["embed", "likelihood", "score"],
         "embedding_dim": int(config.hidden_size),
         "max_sequence_length": MAX_SEQUENCE_LENGTH,
         "pooling_modes": ["mean", "cls", "none"],
@@ -287,6 +312,109 @@ def cmd_prefetch(_args: argparse.Namespace) -> None:
     print(f"prefetched {hf_id}")
 
 
+def _masked_position_logprobs(tokenizer, model, seq, positions, batch_size, device):  # noqa: ANN001
+    """Map each 1-indexed position to its masked log-softmax vector over the vocab."""
+    import torch
+
+    input_ids = tokenizer(seq, return_tensors="pt")["input_ids"][0]
+    ordered = sorted(positions)
+    out: dict[int, object] = {}
+    for start in range(0, len(ordered), batch_size):
+        chunk = ordered[start : start + batch_size]
+        batch = input_ids.repeat(len(chunk), 1)
+        for row, pos in enumerate(chunk):
+            batch[row, pos] = tokenizer.mask_token_id
+        with torch.no_grad():
+            logits = model(input_ids=batch.to(device)).logits
+        log_probs = torch.log_softmax(logits.float(), dim=-1)
+        for row, pos in enumerate(chunk):
+            out[pos] = log_probs[row, pos].cpu().numpy()
+    return out
+
+
+def _wt_position_logprobs(tokenizer, model, seq, positions, device):  # noqa: ANN001
+    """Map each 1-indexed position to its unmasked (WT-context) log-softmax vector."""
+    import torch
+
+    enc = tokenizer(seq, return_tensors="pt").to(device)
+    with torch.no_grad():
+        logits = model(**enc).logits
+    log_probs = torch.log_softmax(logits.float(), dim=-1)[0].cpu().numpy()
+    return {pos: log_probs[pos] for pos in positions}
+
+
+def _score_variant(mutant, wt_seq, logp_by_pos, tokenizer):  # noqa: ANN001
+    """Return (score, n_mutations, error_message_or_None) for one variant."""
+    try:
+        subs = parse_mutant(mutant)
+    except ValueError as exc:
+        return None, 0, str(exc)
+    total = 0.0
+    for wt_aa, pos, mut_aa in subs:
+        if not 1 <= pos <= len(wt_seq):
+            return None, len(subs), f"position {pos} out of range for {mutant}"
+        if wt_seq[pos - 1] != wt_aa:
+            return None, len(subs), f"WT residue mismatch at {pos} in {mutant}"
+        vec = logp_by_pos[pos]
+        wt_id = tokenizer.convert_tokens_to_ids(wt_aa)
+        mut_id = tokenizer.convert_tokens_to_ids(mut_aa)
+        total += float(vec[mut_id] - vec[wt_id])
+    return total, len(subs), None
+
+
+def cmd_score(args: argparse.Namespace) -> None:
+    """Score variants (masked-marginal or wt-marginal) from a CSV input."""
+    import csv as csv_module
+
+    device = pick_device(args.device)
+    tokenizer, model = load_model(device)
+    batch_size = args.batch_size or DEFAULT_BATCH_SIZE
+    with Path(args.input).open(newline="") as handle:
+        rows = list(csv_module.DictReader(handle))
+    warnings: list[str] = []
+    groups: dict[str, list[dict]] = {}
+    for row in rows:
+        groups.setdefault(row["wt_sequence"], []).append(row)
+
+    out_rows = ["variant_id,mutant,n_mutations,score"]
+    for wt_seq, group in groups.items():
+        seq = _truncate(wt_seq, warnings, "<wt>")
+        positions = _valid_positions(group, seq)
+        if args.method == "wt-marginal":
+            logp = _wt_position_logprobs(tokenizer, model, seq, positions, device)
+        else:
+            logp = _masked_position_logprobs(tokenizer, model, seq, positions, batch_size, device)
+        for row in group:
+            score, n_mut, err = _score_variant(row["mutant"], seq, logp, tokenizer)
+            if err is not None:
+                warnings.append(f"{row['variant_id']}: {err}")
+            score_str = "" if score is None else f"{score:.6f}"
+            out_rows.append(f"{row['variant_id']},{row['mutant']},{n_mut},{score_str}")
+
+    output_dir = Path(args.output)
+    (output_dir / "scores.csv").write_text("\n".join(out_rows) + "\n")
+    artifacts = [
+        {
+            "path": "scores.csv",
+            "kind": "variant_scores_csv",
+            "record_ids": [r["variant_id"] for r in rows],
+        }
+    ]
+    write_result(
+        output_dir,
+        {
+            "contract_version": CONTRACT_VERSION,
+            "capability": "score",
+            "model_name": DEFAULT_CHECKPOINT,
+            "n_input_records": len(rows),
+            "n_output_records": len(rows),
+            "artifacts": artifacts,
+            "warnings": warnings,
+            "params": {"method": args.method, "device": args.device or "auto"},
+        },
+    )
+
+
 # --- shared result writer + arg parsing ------------------------------------
 
 
@@ -343,6 +471,16 @@ def build_parser() -> argparse.ArgumentParser:
     likelihood.add_argument("--batch-size", type=int, default=None, dest="batch_size")
     likelihood.add_argument("--device", default=None, choices=["cpu", "cuda", "auto"])
     likelihood.set_defaults(func=cmd_likelihood)
+
+    score = sub.add_parser("score")
+    score.add_argument("--input", required=True)
+    score.add_argument("--output", required=True)
+    score.add_argument(
+        "--method", default="masked-marginal", choices=["masked-marginal", "wt-marginal"]
+    )
+    score.add_argument("--batch-size", type=int, default=None, dest="batch_size")
+    score.add_argument("--device", default=None, choices=["cpu", "cuda", "auto"])
+    score.set_defaults(func=cmd_score)
 
     sub.add_parser("_prefetch").set_defaults(func=cmd_prefetch)
     return parser
