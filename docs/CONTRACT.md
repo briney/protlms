@@ -253,7 +253,7 @@ The success summary written to `/out/result.json`. Mirrors
   last line of **stderr**, matching `plms.contract.ContainerError`:
 
 ```json
-{"contract_version": "0.1", "error_type": "SequenceTooLong",
+{"contract_version": "0.2", "error_type": "SequenceTooLong",
  "message": "sequence 'seq1' exceeds max_sequence_length", "details": {"id": "seq1"}}
 ```
 
