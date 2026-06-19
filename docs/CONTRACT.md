@@ -1,6 +1,6 @@
 # The plms Container Contract
 
-> **Contract version:** `0.2`
+> **Contract version:** `0.3`
 >
 > This document is the agreement between the `plms` client and every model
 > image. It is the *only* thing the two sides share. Its schemas are mirrored
@@ -51,13 +51,10 @@ The image's `ENTRYPOINT` is the contract CLI. It MUST expose these subcommands:
 
 <entry> score      --input /in/variants.csv --output /out
                    [--method masked-marginal|wt-marginal] [--batch-size N] [--device cpu|cuda]
-```
 
-Reserved for future contract minor versions (declared in `capabilities` when
-supported; not yet implemented):
-
-```
-<entry> generate   --input /in/prompts.fasta --output /out [--num-samples N] [--temperature T]
+<entry> generate   --input /in/prompts.fasta --output /out
+                   [--num-samples N] [--temperature T] [--top-p P] [--max-length L]
+                   [--seed S] [--batch-size N] [--device cpu|cuda]
 ```
 
 **Flag conventions**
@@ -92,7 +89,7 @@ Emitted as JSON on stdout by the `manifest` subcommand. Mirrors
 | `capabilities` | string[] | Subset of `embed`, `likelihood`, `score`, `generate`. |
 | `embedding_dim` | int | Representation width. |
 | `max_sequence_length` | int | Longer inputs are truncated (recorded in `warnings`). |
-| `pooling_modes` | string[] | Subset of `mean`, `cls`, `none`. |
+| `pooling_modes` | string[] | Subset of `mean`, `cls`, `none`. Empty if the model does not support `embed`. |
 | `num_layers` | int | Transformer layer count (bounds `--layers`). |
 | `min_gpu_memory_gb` | float \| null | `null` ⇒ runs comfortably on CPU. |
 | `default_batch_size` | int | Used when `--batch-size` is omitted. |
@@ -102,7 +99,7 @@ Emitted as JSON on stdout by the `manifest` subcommand. Mirrors
 
 ```json
 {
-  "contract_version": "0.2",
+  "contract_version": "0.3",
   "name": "esm2_t6_8M",
   "version": "1.0.0",
   "description": "ESM2 8M-parameter masked protein language model.",
@@ -125,6 +122,8 @@ Emitted as JSON on stdout by the `manifest` subcommand. Mirrors
 
 - `embed` / `likelihood`: a FASTA file at `/in/seqs.fasta`. The client
   normalizes headers so each record header is just its id token.
+- `generate`: a FASTA file at `/in/prompts.fasta` where each record's sequence
+  is treated as a prefix. An empty sequence triggers unconditional sampling.
 - `score`: a CSV at `/in/variants.csv` with the schema described below.
 
 ### Outputs
@@ -139,6 +138,7 @@ than globbing the directory.
 | `embed`, per-residue (`none`) | `per_residue/<id>.npy` — one `(L, embedding_dim)` float32 array per record. |
 | `likelihood` | `likelihoods.csv` (schema below). |
 | `score` | `scores.csv` (schema below). |
+| `generate` | `generated.fasta` — clean amino-acid sequences (control/special tokens stripped). Headers are `{prompt_id}__sample{k}` for k=0..num_samples-1. |
 
 **Record ids** are sanitized for use as filenames / npz keys: characters
 outside `[A-Za-z0-9._-]` become `_`, and collisions are de-duplicated with a
@@ -151,9 +151,11 @@ original.
 |---|---|
 | `record_id` | The (sanitized) record id. |
 | `seq_len` | Number of scored residues. |
-| `pseudo_log_likelihood` | Σ over positions of log P(true residue \| rest), masked-marginal. |
-| `mean_pseudo_log_likelihood` | `pseudo_log_likelihood / seq_len` (length-normalized). |
-| `pseudo_perplexity` | `exp(-mean_pseudo_log_likelihood)`. |
+| `log_likelihood` | Σ over positions of log P(true residue). The method (masked-marginal vs. causal) is recorded in `result.json` `params.likelihood_method`. |
+| `mean_log_likelihood` | `log_likelihood / seq_len` (length-normalized). |
+| `perplexity` | `exp(-mean_log_likelihood)`. |
+
+The method used (e.g. masked-marginal or causal) is recorded in the result JSON under `params.likelihood_method`.
 
 **`variants.csv` input columns (for `score`):**
 
@@ -195,7 +197,7 @@ The success summary written to `/out/result.json`. Mirrors
 | Field | Type | Notes |
 |---|---|---|
 | `path` | string | Relative to `/out`. |
-| `kind` | string | `pooled_embeddings`, `per_residue_embeddings`, `likelihoods_csv`, or `variant_scores_csv` (free string for forward compatibility). |
+| `kind` | string | `pooled_embeddings`, `per_residue_embeddings`, `likelihoods_csv`, `variant_scores_csv`, or `generated_fasta` (free string for forward compatibility). |
 | `record_ids` | string[] \| null | Records contained in this artifact. |
 | `shape` | int[] \| null | Logical array shape, if applicable. |
 | `dtype` | string \| null | e.g. `float32`. |
@@ -204,7 +206,7 @@ The success summary written to `/out/result.json`. Mirrors
 
 ```json
 {
-  "contract_version": "0.2",
+  "contract_version": "0.3",
   "capability": "embed",
   "model_name": "esm2_t6_8M",
   "n_input_records": 3,
@@ -227,7 +229,7 @@ The success summary written to `/out/result.json`. Mirrors
 
 ```json
 {
-  "contract_version": "0.2",
+  "contract_version": "0.3",
   "capability": "score",
   "model_name": "esm2_t6_8M",
   "n_input_records": 3,
@@ -244,6 +246,24 @@ The success summary written to `/out/result.json`. Mirrors
 }
 ```
 
+**Worked example (generate)** ([`tests/data/result.generate.example.json`](../tests/data/result.generate.example.json)):
+
+```json
+{
+  "contract_version": "0.3",
+  "capability": "generate",
+  "model_name": "progen2-small",
+  "n_input_records": 2,
+  "n_output_records": 4,
+  "artifacts": [
+    {"path": "generated.fasta", "kind": "generated_fasta",
+     "record_ids": ["prompt1__sample0", "prompt1__sample1", "uncond__sample0", "uncond__sample1"]}
+  ],
+  "warnings": [],
+  "params": {"num_samples": "2", "temperature": "0.8", "top_p": "0.9", "seed": "42"}
+}
+```
+
 ---
 
 ## 6. Error contract
@@ -253,7 +273,7 @@ The success summary written to `/out/result.json`. Mirrors
   last line of **stderr**, matching `plms.contract.ContainerError`:
 
 ```json
-{"contract_version": "0.2", "error_type": "SequenceTooLong",
+{"contract_version": "0.3", "error_type": "SequenceTooLong",
  "message": "sequence 'seq1' exceeds max_sequence_length", "details": {"id": "seq1"}}
 ```
 
