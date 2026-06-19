@@ -20,7 +20,7 @@ import re
 import sys
 from pathlib import Path
 
-CONTRACT_VERSION = "0.2"
+CONTRACT_VERSION = "0.3"
 MAX_SEQUENCE_LENGTH = 1024
 DEFAULT_BATCH_SIZE = 8
 DEFAULT_CHECKPOINT = os.environ.get("ESM2_CHECKPOINT", "esm2_t6_8M")
@@ -269,7 +269,7 @@ def cmd_likelihood(args: argparse.Namespace) -> None:
     output_dir = Path(args.output)
     warnings: list[str] = []
 
-    rows = ["record_id,seq_len,pseudo_log_likelihood,mean_pseudo_log_likelihood,pseudo_perplexity"]
+    rows = ["record_id,seq_len,log_likelihood,mean_log_likelihood,perplexity"]
     for clean_id, (rid, seq) in zip(ids, records, strict=True):
         seq = _truncate(seq, warnings, rid)
         pll = _pseudo_log_likelihood(tokenizer, model, seq, batch_size, device)
@@ -438,6 +438,8 @@ def _write_capability_result(
     params = {"device": args.device or "auto"}
     if capability == "embed":
         params |= {"pooling": args.pooling, "layers": args.layers}
+    elif capability == "likelihood":
+        params |= {"likelihood_method": "masked_marginal"}
     write_result(
         output_dir,
         {
