@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "9a61e076431b",
+  "strategy": "manual-commit",
+  "branch": "feature/phase1-generate-progen2",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "src/plms/__init__.py",
+    "src/plms/models.py",
+    "tests/test_models.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/9a/61e076431b/0/metadata.json",
+      "transcript": "/9a/61e076431b/0/full.jsonl",
+      "content_hash": "/9a/61e076431b/0/content_hash.txt",
+      "prompt": "/9a/61e076431b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 30188,
+    "cache_creation_tokens": 869213,
+    "cache_read_tokens": 83561016,
+    "output_tokens": 373219,
+    "api_call_count": 284
+  }
+}
