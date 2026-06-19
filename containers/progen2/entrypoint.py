@@ -320,8 +320,11 @@ def cmd_generate(args: argparse.Namespace) -> None:
 
     out_lines: list[str] = []
     out_ids: list[str] = []
+    warnings: list[str] = []
     for rid, prefix in records:
         prompt_ids = _encode_prompt(tokenizer, prefix)
+        if len(prompt_ids) >= max_length:
+            warnings.append(f"prompt {rid!r} length >= max_length; no new tokens generated")
         for k in range(args.num_samples):
             generated_ids = _sample_sequence(
                 model=model,
@@ -351,7 +354,7 @@ def cmd_generate(args: argparse.Namespace) -> None:
             "artifacts": [
                 {"path": "generated.fasta", "kind": "generated_fasta", "record_ids": out_ids}
             ],
-            "warnings": [],
+            "warnings": warnings,
             "params": {
                 "num_samples": str(args.num_samples),
                 "temperature": str(args.temperature),
@@ -376,6 +379,7 @@ def cmd_likelihood(args: argparse.Namespace) -> None:
     records = read_fasta(Path(args.input))
     rows = ["record_id,seq_len,log_likelihood,mean_log_likelihood,perplexity"]
     warnings: list[str] = []
+    n_scored = 0
     for rid, seq in records:
         if not seq:
             warnings.append(f"skipping empty sequence {rid!r}")
@@ -386,6 +390,7 @@ def cmd_likelihood(args: argparse.Namespace) -> None:
         ll = _causal_log_likelihood(tokenizer, model, seq, device)
         mean = ll / max(len(seq), 1)
         rows.append(f"{rid},{len(seq)},{ll:.6f},{mean:.6f},{math.exp(-mean):.6f}")
+        n_scored += 1
     output_dir = Path(args.output)
     (output_dir / "likelihoods.csv").write_text("\n".join(rows) + "\n")
     write_result(
@@ -395,7 +400,7 @@ def cmd_likelihood(args: argparse.Namespace) -> None:
             "capability": "likelihood",
             "model_name": DEFAULT_CHECKPOINT,
             "n_input_records": len(records),
-            "n_output_records": len(records),
+            "n_output_records": n_scored,
             "artifacts": [{"path": "likelihoods.csv", "kind": "likelihoods_csv"}],
             "warnings": warnings,
             "params": {"likelihood_method": "causal", "device": args.device or "auto"},
@@ -408,6 +413,13 @@ def _causal_log_likelihood(tokenizer, model, seq: str, device: str) -> float:  #
 
     Sums log P(token_t | token_{0..t-1}) over all positions using a single
     forward pass.
+
+    Convention note: the score is the left-to-right log-likelihood over the
+    residue-token sequence as encoded by the tokenizer, WITHOUT a prepended BOS
+    control token. It is internally consistent and comparable across sequences
+    scored by the same model, but is NOT directly comparable to ESM2's
+    masked-marginal pseudo-log-likelihood, which uses a different scoring
+    objective (masked language modelling) and typically includes BOS/EOS tokens.
 
     Args:
         tokenizer: ProGen2 tokenizers.Tokenizer instance.

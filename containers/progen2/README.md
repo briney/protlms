@@ -74,5 +74,11 @@ for you.
 
 - `likelihood` uses true causal left-to-right log-likelihood in a single forward
   pass per sequence (O(1) forward passes, vs. O(L) for masked-marginal ESM2).
+- **Likelihood convention**: scores are left-to-right log P(sequence) over
+  residue tokens as encoded by the ProGen2 tokenizer, without a prepended BOS
+  token. Scores are internally consistent and comparable across sequences for the
+  same model checkpoint, but are **not** directly comparable to ESM2's
+  masked-marginal pseudo-log-likelihood, which uses a different scoring objective
+  (masked language modelling).
 - The image runs on CPU when launched without `--gpus`, and uses CUDA when
   launched with `--gpus all`.
