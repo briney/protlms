@@ -27,11 +27,14 @@ from plms.exceptions import (
     InvalidRequestError,
 )
 from plms.io import (
+    check_csv_has_columns,
     load_per_residue_embeddings,
     load_pooled_embeddings,
     read_fasta,
     read_likelihoods,
     read_result,
+    read_variant_scores,
+    stage_file,
     stage_inputs,
 )
 from plms.registry import ModelEntry, Registry
@@ -73,9 +76,23 @@ class LikelihoodResult:
     output_dir: Path
     _keepalive: tempfile.TemporaryDirectory | None = field(default=None, repr=False)
 
-    def rows(self) -> list[dict[str, str | int | float]]:
+    def rows(self) -> list[dict[str, str | int | float | None]]:
         """Return one row per record with likelihood/perplexity columns."""
         return read_likelihoods(self.output_dir, self.result)
+
+
+@dataclass
+class ScoreResult:
+    """Handle to the outputs of a ``score`` run (CSV parsed lazily)."""
+
+    result: Result
+    output_dir: Path
+    method: str
+    _keepalive: tempfile.TemporaryDirectory | None = field(default=None, repr=False)
+
+    def rows(self) -> list[dict[str, str | int | float | None]]:
+        """Return one row per variant: variant_id, mutant, n_mutations, score."""
+        return read_variant_scores(self.output_dir, self.result)
 
 
 class Model:
@@ -124,10 +141,13 @@ class Model:
         """
         self._require_capability(Capability.EMBED)
         self._require_pooling(pooling)
+        records = self._read_records(fasta)
         extra = ["--pooling", pooling, "--layers", ",".join(str(x) for x in layers)]
         if batch_size is not None:
             extra += ["--batch-size", str(batch_size)]
-        result, out_dir, keep = self._run(Capability.EMBED, fasta, extra, output_dir, use_gpu)
+        result, out_dir, keep = self._run(
+            Capability.EMBED, stage_inputs(records), extra, output_dir, use_gpu
+        )
         return EmbeddingResult(result=result, output_dir=out_dir, pooling=pooling, _keepalive=keep)
 
     def likelihood(
@@ -146,9 +166,50 @@ class Model:
             ContainerExecutionError: If the container run fails.
         """
         self._require_capability(Capability.LIKELIHOOD)
+        records = self._read_records(fasta)
         extra = ["--batch-size", str(batch_size)] if batch_size is not None else []
-        result, out_dir, keep = self._run(Capability.LIKELIHOOD, fasta, extra, output_dir, use_gpu)
+        result, out_dir, keep = self._run(
+            Capability.LIKELIHOOD, stage_inputs(records), extra, output_dir, use_gpu
+        )
         return LikelihoodResult(result=result, output_dir=out_dir, _keepalive=keep)
+
+    def score(
+        self,
+        variants_csv: str | Path,
+        *,
+        method: str = "masked-marginal",
+        output_dir: Path | None = None,
+        use_gpu: bool = False,
+        batch_size: int | None = None,
+    ) -> ScoreResult:
+        """Score sequence variants for effect.
+
+        Args:
+            variants_csv: CSV with columns ``variant_id, wt_sequence, mutant``.
+            method: ``"masked-marginal"`` (default) or ``"wt-marginal"``.
+            output_dir: Where to write outputs; a temporary directory if ``None``.
+            use_gpu: Request all GPUs for the container run.
+            batch_size: Override the model's default batch size.
+
+        Raises:
+            CapabilityNotSupportedError: If the model does not support scoring.
+            InvalidRequestError: If ``method`` is invalid or the CSV lacks columns.
+            ContainerExecutionError: If the container run fails.
+        """
+        self._require_capability(Capability.SCORE)
+        if method not in ("masked-marginal", "wt-marginal"):
+            raise InvalidRequestError(
+                f"unsupported scoring method {method!r}; choose 'masked-marginal' or 'wt-marginal'"
+            )
+        path = Path(variants_csv)
+        check_csv_has_columns(path, ("variant_id", "wt_sequence", "mutant"))
+        extra = ["--method", method]
+        if batch_size is not None:
+            extra += ["--batch-size", str(batch_size)]
+        result, out_dir, keep = self._run(
+            Capability.SCORE, stage_file(path, "variants.csv"), extra, output_dir, use_gpu
+        )
+        return ScoreResult(result=result, output_dir=out_dir, method=method, _keepalive=keep)
 
     # --- internals ---------------------------------------------------------
 
@@ -166,14 +227,7 @@ class Model:
                 f"unsupported pooling {pooling!r}; model supports {sorted(supported)}"
             )
 
-    def _run(
-        self,
-        capability: Capability,
-        fasta: str | Path,
-        extra_args: list[str],
-        output_dir: Path | None,
-        use_gpu: bool,
-    ) -> tuple[Result, Path, tempfile.TemporaryDirectory | None]:
+    def _read_records(self, fasta: str | Path) -> list:
         records = read_fasta(Path(fasta))
         if not records:
             raise InvalidRequestError(f"input FASTA {fasta} contains no records")
@@ -186,8 +240,18 @@ class Model:
                 self._manifest.max_sequence_length,
                 too_long[:5],
             )
+        return records
+
+    def _run(
+        self,
+        capability: Capability,
+        staging,  # contextmanager[StagedInput]
+        extra_args: list[str],
+        output_dir: Path | None,
+        use_gpu: bool,
+    ) -> tuple[Result, Path, tempfile.TemporaryDirectory | None]:
         out_dir, keep = self._resolve_output_dir(output_dir)
-        with stage_inputs(records) as staged:
+        with staging as staged:
             command = [
                 capability.value,
                 "--input",
