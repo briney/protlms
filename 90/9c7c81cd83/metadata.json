@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "909c7c81cd83",
+  "strategy": "manual-commit",
+  "branch": "feature/phase1-esm-c",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/superpowers/plans/2026-06-19-esm-c-container.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/90/9c7c81cd83/0/metadata.json",
+      "transcript": "/90/9c7c81cd83/0/full.jsonl",
+      "content_hash": "/90/9c7c81cd83/0/content_hash.txt",
+      "prompt": "/90/9c7c81cd83/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 772,
+    "cache_creation_tokens": 59552,
+    "cache_read_tokens": 800143,
+    "output_tokens": 48744,
+    "api_call_count": 8
+  }
+}
