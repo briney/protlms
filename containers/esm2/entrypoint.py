@@ -3,7 +3,7 @@
 
 Implements the plms container contract (see docs/CONTRACT.md) for the ESM2
 masked protein language model via HuggingFace ``transformers``. Exposes the
-``manifest``, ``embed``, and ``likelihood`` subcommands plus a hidden
+``manifest``, ``embed``, ``likelihood``, and ``score`` subcommands plus a hidden
 ``_prefetch`` used at build time to bake weights into the image.
 
 This file is intentionally dependency-light at import time: ``torch`` and
@@ -376,7 +376,7 @@ def cmd_score(args: argparse.Namespace) -> None:
     for row in rows:
         groups.setdefault(row["wt_sequence"], []).append(row)
 
-    out_rows = ["variant_id,mutant,n_mutations,score"]
+    out_rows: list[list[object]] = []
     for wt_seq, group in groups.items():
         seq = _truncate(wt_seq, warnings, "<wt>")
         positions = _valid_positions(group, seq)
@@ -389,10 +389,13 @@ def cmd_score(args: argparse.Namespace) -> None:
             if err is not None:
                 warnings.append(f"{row['variant_id']}: {err}")
             score_str = "" if score is None else f"{score:.6f}"
-            out_rows.append(f"{row['variant_id']},{row['mutant']},{n_mut},{score_str}")
+            out_rows.append([row["variant_id"], row["mutant"], n_mut, score_str])
 
     output_dir = Path(args.output)
-    (output_dir / "scores.csv").write_text("\n".join(out_rows) + "\n")
+    with (output_dir / "scores.csv").open("w", newline="") as handle:
+        writer = csv_module.writer(handle)
+        writer.writerow(["variant_id", "mutant", "n_mutations", "score"])
+        writer.writerows(out_rows)
     artifacts = [
         {
             "path": "scores.csv",

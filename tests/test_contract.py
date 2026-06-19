@@ -152,6 +152,7 @@ def test_documented_result_example_validates() -> None:
 
 
 def test_documented_score_result_example_validates() -> None:
+    """The score result example in docs/CONTRACT.md must parse as a Result."""
     result = Result.model_validate_json((_DATA / "result.score.example.json").read_text())
     assert result.capability is Capability.SCORE
     assert result.artifacts[0].kind == "variant_scores_csv"

@@ -23,7 +23,7 @@ class Capability(StrEnum):
 
     EMBED = "embed"
     LIKELIHOOD = "likelihood"
-    SCORE = "score"  # reserved for a future contract minor version
+    SCORE = "score"  # implemented in contract 0.2
     GENERATE = "generate"  # reserved for a future contract minor version
 
 
