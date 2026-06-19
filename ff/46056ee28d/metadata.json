@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "ff46056ee28d",
+  "strategy": "manual-commit",
+  "branch": "feature/phase1-esm-c",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "containers/esm-c/entrypoint.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ff/46056ee28d/0/metadata.json",
+      "transcript": "/ff/46056ee28d/0/full.jsonl",
+      "content_hash": "/ff/46056ee28d/0/content_hash.txt",
+      "prompt": "/ff/46056ee28d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 10054,
+    "cache_creation_tokens": 247748,
+    "cache_read_tokens": 7160902,
+    "output_tokens": 112310,
+    "api_call_count": 55
+  }
+}

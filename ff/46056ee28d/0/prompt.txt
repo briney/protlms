@@ -1,0 +1,236 @@
+subagent-driven
+
+---
+
+<task-notification>
+<task-id>a0b16f183916560e4</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a0b16f183916560e4.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 1: registry entries" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Excellent. Now let me create a summary for the report back:
+
+---
+
+## Status: DONE
+
+**Commit Created:**
+- `81aa80e registry: add esm-c-300m/600m entries`
+
+**Test Summary:**
+All 7 registry tests pass, including new `test_resolve_esm_c` that verifies:
+- Both esm-c-300m and esm-c-600m resolve with correct image and model_family
+- Both primary names and aliases (esmc_300m, esmc_600m) resolve to same entries
+
+**No Concerns**
+- Only the two intended files modified (models.yaml + test_registry.py)
+- TDD workflow followed exactly: RED → GREEN → COMMIT
+- Self-review confirms no over-engineering or stray edits
+
+**Report File:**
+`/home/briney/git/plms/.superpowers/sdd/task-1-report.md`</result>
+<usage><subagent_tokens>33245</subagent_tokens><tool_uses>22</tool_uses><duration_ms>84924</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a5ce29df0bf5cd65f</task-id>
+<tool-use-id>toolu_011jooKZ5gvSLBQzu5Yre9pR</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a5ce29df0bf5cd65f.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 1 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Good commit message (imperative, concise, follows project style). The `Entire-Checkpoint` line is from the system, not manually added.
+
+Now let me verify the test follows the exact pattern from the brief:
+
+**Test from brief (lines 18-28):**
+```python
+def test_resolve_esm_c() -&gt; None:
+    registry = Registry.load()
+    e300 = registry.resolve("esm-c-300m")
+    assert e300.image == "plms-esm-c:300m"
+    assert e300.model_family == "esm-c"
+    assert registry.resolve("esmc_300m") == e300
+    e600 = registry.resolve("esm-c-600m")
+    assert e600.image == "plms-esm-c:600m"
+    assert e600.model_family == "esm-c"
+    assert registry.resolve("esmc_600m") == e600
+```
+
+**Test in implementation (lines 60-69 of current file):**
+```python
+def test_resolve_esm_c() -&gt; None:
+    registry = Registry.load()
+    e300 = registry.resolve("esm-c-300m")
+    assert e300.image == "plms-esm-c:300m"
+    assert e300.model_family == "esm-c"
+    assert registry.resolve("esmc_300m") == e300
+    e600 = registry.resolve("esm-c-600m")
+    assert e600.image == "plms-esm-c:600m"
+    assert e600.model_family == "esm-c"
+    assert registry.resolve("esmc_600m") == e600
+```
+
+Perfect match.
+
+---
+
+## Review Summary
+
+✅ **Spec Compliance**
+
+The implementation **exactly matches all requirements**:
+- Only two files modified: `src/plms/_data/models.yaml` and `tests/test_registry.py` ✓
+- Both ESM-C entries added with correct field values: names, aliases, images, model_family ✓
+- Test function matches the brief exactly ✓
+- Test correctly asserts resolution behavior: primary name resolution, alias resolution, equality checks ✓
+
+✅ **Test Quality**
+
+The test is **substantive and meaningful**:
+- Asserts image equality (not just name resolution)
+- Asserts model_family equality
+- Verifies alias-to-name mapping via equality (`==`)
+- Tests both model variants (300m and 600m)
+- Would fail immediately if entries were missing, misconfigured, or aliases weren't wired
+
+✅ **Code Quality**
+
+- YAML formatting matches existing entries exactly (indentation, structure)
+- Commit message follows project conventions (imperative, concise)
+- All 108 tests pass (skips are expected Docker integration tests)
+- Test mirrors the pattern of `test_resolve_progen2_small`, maintaining consistency
+
+✅ **TDD Compliance**
+
+- Test was added before entries (per diff order and report statement)
+- Registry entries make the test pass
+- All registry tests pass (7/7)
+
+---
+
+## Task quality: Approved
+
+The implementation is correct, complete, and well-tested. The test substantively verifies resolution behavior (image, model_family, and alias equality) rather than asserting nothing, and the entries are configured exactly as specified with no extraneous changes.</result>
+<usage><subagent_tokens>28609</subagent_tokens><tool_uses>23</tool_uses><duration_ms>78595</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a1aa93801f99bbfae</task-id>
+<tool-use-id>toolu_01R1eHo6AFtkGDtxwf99fLFy</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a1aa93801f99bbfae.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 2: ESM-C entrypoint" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Status:** DONE
+- **Commit:** `ee68b88` — esm-c: contract entrypoint (manifest/embed/likelihood/score) + helper tests
+- **Tests:** 9/9 passed (`tests/test_esmc_entrypoint.py`); ruff format + check clean; no torch/esm imported at module load
+- **Concerns:** None
+- **Report:** `/home/briney/git/plms/.superpowers/sdd/task-2-report.md`</result>
+<usage><subagent_tokens>43335</subagent_tokens><tool_uses>16</tool_uses><duration_ms>204852</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a8345c33b79dbb764</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a8345c33b79dbb764.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 2 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The monkeypatch in the test patches the module-level `DEFAULT_CHECKPOINT` name, and `build_manifest()` references it as a global — this works correctly because Python's global lookup happens at call time, not at function definition time.
+
+---
+
+## Spec Compliance: ✅
+
+### Strengths
+
+1. **Exact file scope.** The diff touches exactly two new files: `containers/esm-c/entrypoint.py` and `tests/test_esmc_entrypoint.py`. No other files changed.
+
+2. **No top-level ML imports.** `torch`, `esm`, and `numpy` are all inside function bodies. The module imports cleanly with no ML stack present, confirmed by the 9-test pass at 0.01s.
+
+3. **All fixed values correct.** `CONTRACT_VERSION="0.3"`, `MAX_SEQUENCE_LENGTH=2048`, `DEFAULT_BATCH_SIZE=8`, `DEFAULT_CHECKPOINT` from `ESMC_CHECKPOINT` env var defaulting to `"esmc_300m"`. `_MODEL_INFO` table matches the brief exactly (300m: 960/30/None; 600m: 1152/36/4.0).
+
+4. **Capabilities and pooling modes correct.** `["embed", "likelihood", "score"]` — no "generate". `["mean", "cls", "none"]`.
+
+5. **`--layers` rejection is structured.** `cmd_embed` calls `emit_error_and_exit("InvalidInput", ...)` — a proper contract error, not a crash or silent acceptance.
+
+6. **SDK call surface matches the brief verbatim.** `ESMC.from_pretrained(DEFAULT_CHECKPOINT, device=torch.device(device), use_flash_attn=False)`; `model.encode(ESMProtein(sequence=seq)).sequence`; `model(sequence_tokens=...).sequence_logits` and `.embeddings`; `model.tokenizer.mask_token_id` / `.convert_tokens_to_ids`. No transcription errors found.
+
+7. **Likelihood method is correctly labeled.** `params["likelihood_method"] = "masked_marginal"` in `_write_capability_result`. The `score` command stores `{"method": args.method}` separately (not "likelihood_method") which is appropriate since score is a different capability.
+
+8. **Masked-marginal position slicing is correct.** `positions = list(range(1, len(ids) - 1))` correctly skips BOS (index 0) and EOS (last), iterating over residue positions only.
+
+9. **`_wt_position_logprobs` indexing is correct.** `log_probs[pos]` for 1-indexed positions is safe because token index 1 is the first residue after BOS, exactly matching the 1-indexed convention used throughout.
+
+10. **TDD evidence is genuine.** The RED run shows a `FileNotFoundError` at collection time (the correct failure mode), and the GREEN run shows 9 tests passing after the entrypoint was created.
+
+11. **`build_manifest()` is model-load-free.** It reads only from `_MODEL_INFO[DEFAULT_CHECKPOINT]`, no torch/esm import needed. The monkeypatch test confirms dynamic global resolution works correctly.
+
+12. **Ruff clean.** Both format and check pass with no changes.
+
+### Issues
+
+No Critical or Important issues found.
+
+**Minor — `containers/esm-c/entrypoint.py` lines 302–356 (`cmd_embed`):** The `output_dir` is never explicitly `mkdir`-ed for the pooled path. When `args.pooling` is `"mean"` or `"cls"`, `np.savez(output_dir / "embeddings.npz", ...)` will fail if `output_dir` doesn't exist. The `"none"` branch does `per_residue_dir.mkdir(parents=True, exist_ok=True)` but that creates the subdirectory, not necessarily `output_dir` itself if it's also absent. In practice the contract runner mounts and pre-creates `/out`, so this won't fire in Docker, but it's an inconsistency between the two branches. (Not a brief violation — the brief's code is identical here; this is inherited from the spec.)
+
+**Minor — `containers/esm-c/entrypoint.py` line 397 (`cmd_score`):** `_truncate(wt_seq, warnings, "&lt;wt&gt;")` uses a fixed label `"&lt;wt&gt;"` for the warning message regardless of how many distinct WT sequences are being truncated. Multiple truncated WT sequences will all emit `"sequence '&lt;wt&gt;' truncated..."`, making the warning non-informative. The brief is identical here — this is inherited, not introduced.
+
+**Minor — `containers/esm-c/entrypoint.py` lines 95–99:** `math` is imported inside `perplexity_from_mean` with a lazy `import math`. While technically fine (math is stdlib and always available), the lazy-import pattern is intended for heavy ML deps. A module-level `import math` would be cleaner. That said, this exactly matches the brief's code, so not a deviation.
+
+---
+
+**Task quality: Approved.** The implementation is a verbatim, faithful transcription of the brief with no dropped functions, no altered SDK calls, no wrong tensor indexing, and no spec violations. All nine unit tests pass, heavy imports are correctly lazy, and the two-file constraint is satisfied. The three minor notes are all inherited from the brief itself, not introduced by the implementer.</result>
+<usage><subagent_tokens>37815</subagent_tokens><tool_uses>5</tool_uses><duration_ms>52489</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>acbd874df324823f3</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/acbd874df324823f3.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 3: ESM-C Dockerfile" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The monitor is watching the build. I'll wait for the notification.</result>
+<usage><subagent_tokens>37485</subagent_tokens><tool_uses>17</tool_uses><duration_ms>84014</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>acbd874df324823f3</task-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/acbd874df324823f3.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 3: ESM-C Dockerfile" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The `.superpowers/` directory is gitignored (the report file doesn't show in status), and only my two intended files are present as untracked. No unintended changes.
+
+**Status: BLOCKED**
+
+The Dockerfile + README were created verbatim from the brief and are correct, but the image cannot build, so I made no commits.
+
+- **Commits created:** none (deliverable not achievable until an upstream fix lands; files left uncommitted in working tree).
+- **Build + smoke-test:** Build FAILED at the `_prefetch` layer; manifest smoke-test never reached. `pip install "esm==3.2.3"` itself succeeded (cp312 wheels, torch 2.12.1).
+- **build-essential fallback:** NOT applied / not needed — the failure was not a missing-compiler `pip` error.
+
+**Blocker (different reason than the pip fallback):** `entrypoint.py` (Task 2, merged `ee68b88`) calls `ESMC.from_pretrained(..., use_flash_attn=False)`, but esm 3.2.3 has no such kwarg:
+```
+ESMC.from_pretrained() got an unexpected keyword argument 'use_flash_attn'  (TypeError)
+```
+I verified the installed API directly: `ESMC.from_pretrained(model_name, device)` and the lower-level `load_local_model(model_name, device)` both lack `use_flash_attn`. Flash-attn selection is internal and driven by import availability, so the intent ("no flash-attn") already holds — the kwarg must just be removed.
+
+**Minimal fix (in Task 2's `containers/esm-c/entrypoint.py`, not a Task 3 file):** drop `use_flash_attn=False` from the two `ESMC.from_pretrained(...)` calls in `load_model()` (~lines 170-181) and `cmd_prefetch()` (~lines 419-429). Then rebuild + smoke-test. This also affects Task 4 and every inference path (`load_model` is shared), so the fix is required regardless.
+
+Report: /home/briney/git/plms/.superpowers/sdd/task-3-report.md</result>
+<usage><subagent_tokens>92099</subagent_tokens><tool_uses>194</tool_uses><duration_ms>1111454</duration_ms></usage>
+</task-notification>
