@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "e94b93015aee",
+  "strategy": "manual-commit",
+  "branch": "feature/phase1-score-variant-scoring",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "tests/test_integration_esm2.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e9/4b93015aee/0/metadata.json",
+      "transcript": "/e9/4b93015aee/0/full.jsonl",
+      "content_hash": "/e9/4b93015aee/0/content_hash.txt",
+      "prompt": "/e9/4b93015aee/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 28370,
+    "cache_creation_tokens": 743606,
+    "cache_read_tokens": 55819024,
+    "output_tokens": 282972,
+    "api_call_count": 229
+  }
+}
