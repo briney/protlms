@@ -1,0 +1,1002 @@
+Let's go with execution option 1 (subagent-driven)
+
+---
+
+<task-notification>
+<task-id>a955ed30dde2a1249</task-id>
+<tool-use-id>toolu_014Uvkj9Y2bGzgdZzS7ZjoSP</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a955ed30dde2a1249.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 1: contract bump" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>---
+
+**Status:** DONE
+
+**Commits created:**
+- `f12417e` contract: bump to 0.2 and add variant_scores_csv artifact kind
+
+**Test summary:** All 55 tests pass (18 contract tests green, 4 docker skipped as expected); all linting/formatting/type checks pass
+
+**Concerns:** None
+
+**Report file:** `/home/briney/git/plms/.superpowers/sdd/task-1-report.md`</result>
+<usage><subagent_tokens>29613</subagent_tokens><tool_uses>23</tool_uses><duration_ms>58453</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aa349d717f55bb21e</task-id>
+<tool-use-id>toolu_01PDDEcgLSEgjGcSfwfuU1my</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/aa349d717f55bb21e.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 1 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I have everything I need. Here is the full review:
+
+---
+
+### Spec Compliance
+
+- `src/plms/contract.py:31` — `CONTRACT_VERSION = "0.2"`. Exact match required. ✅
+- `src/plms/contract.py:53` — `VARIANT_SCORES_CSV = "variant_scores_csv"`. Exact match required. ✅
+- `tests/data/manifest.example.json:2` — `"contract_version": "0.2"`. ✅
+- `tests/data/manifest.example.json:5` — `"capabilities": ["embed", "likelihood", "score"]`. ✅
+- `tests/data/result.embed.example.json:2` — `"contract_version": "0.2"`. ✅
+- `tests/data/result.score.example.json` (new file) — matches the brief's exact JSON shape: `contract_version`, `capability`, `model_name`, `n_input_records`, `n_output_records`, `artifacts` (with `path`, `kind`, `record_ids`), `warnings`, `params`. ✅
+- `tests/test_contract.py:138-139` — version assertion updated to `"0.2"` and `(0, 2)`. ✅
+- `tests/test_contract.py:161` — `Capability.SCORE in manifest.capabilities` assertion added. ✅
+- `tests/test_contract.py:171-174` — `test_documented_score_result_example_validates` added, asserts both `Capability.SCORE` and `"variant_scores_csv"` kind. ✅
+- Backward compatibility: `Capability.SCORE` and `Capability.GENERATE` were already present in the enum (both marked "reserved for a future contract minor version") before this diff — no new capability enum values were required. The existing comment `# reserved for a future contract minor version` on `SCORE` remains, which is now slightly inaccurate since this task activates the score capability at the fixture/contract level. ⚠️ Minor.
+- No `score` logic (runner, CLI, adapter) was added anywhere in the diff. Scope is clean. ✅
+- All five files named in the brief are the only files touched. ✅
+
+---
+
+### Strengths
+
+- Diff is minimal and surgical — exactly the five files specified in the brief, no stray edits.
+- The `result.score.example.json` fixture matches the brief's JSON verbatim, including field ordering and the inline artifact object (compact style with no extra whitespace indentation in the artifact array).
+- `test_documented_score_result_example_validates` tests both the capability identity (`is Capability.SCORE`) and the exact artifact kind string, giving the drift guard real teeth.
+- `test_documented_manifest_example_validates` now has the `contract_version == CONTRACT_VERSION` check (pre-existing) plus both `EMBED` and `SCORE` capability assertions — good belt-and-suspenders for the fixture.
+- All tooling (ruff, ty) reported clean; the commit message follows the project convention.
+
+---
+
+### Issues
+
+#### Minor (Nice to Have)
+
+**`src/plms/contract.py:39` — Stale inline comment on `Capability.SCORE`**
+
+```python
+SCORE = "score"  # reserved for a future contract minor version
+```
+
+This comment was accurate before this task but is now misleading: the contract has been bumped to 0.2 specifically to activate `score`. The comment should be removed or updated (e.g., `# activated in 0.2`). No functional impact, but it will confuse a future reader who sees 0.2 in the version constant and "reserved for a future minor version" on the same enum member.
+
+**`tests/test_contract.py:171-174` — Missing docstring on new test**
+
+`test_documented_result_example_validates` (the existing embed test, line 165) has a docstring:
+```python
+"""The worked example in docs/CONTRACT.md must parse as a Result."""
+```
+The new `test_documented_score_result_example_validates` (line 171) has none. Consistent with the project style (and the brief's docstring-on-all-public-functions rule), it should have one, e.g.:
+```python
+"""The score result example in docs/CONTRACT.md must parse as a Result with score capability."""
+```
+
+---
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** All spec requirements are met exactly — correct version string, correct enum value, all three fixtures updated/created to spec, all required test assertions present, no out-of-scope changes. The two findings are both cosmetic/style-only and do not affect correctness or the drift guard.</result>
+<usage><subagent_tokens>22144</subagent_tokens><tool_uses>3</tool_uses><duration_ms>30529</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a181cb85d51f9fc4a</task-id>
+<tool-use-id>toolu_01ULrbAAVct3XPAFffkUURaw</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a181cb85d51f9fc4a.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 2: io CSV support" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Excellent! Everything is complete and verified. Here's the summary:
+
+---
+
+**Status:** DONE_WITH_CONCERNS
+
+**Commits:**
+- `f4076b4` — io: add CSV staging, column validation, and variant-scores reader
+
+**Test Summary:**
+All 17 tests in test_io.py pass, including 4 new tests (stage_file, check_csv_has_columns ×2, read_variant_scores). Existing test_read_likelihoods_coerces_numeric_columns still passes. Full suite: 57 pass, 4 skipped.
+
+**Concerns:**
+Type checking error in `src/plms/models.py:76` due to `read_likelihoods` return type now including `None` (correct per brief spec). This is expected and will be fixed in Task 3 when `models.py` is updated. Cannot fix here per brief constraint (no modifications outside io.py/test_io.py).
+
+**Report:** `/home/briney/git/plms/.superpowers/sdd/task-2-report.md`</result>
+<usage><subagent_tokens>46571</subagent_tokens><tool_uses>36</tool_uses><duration_ms>135910</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a6e9d1d96198db7c2</task-id>
+<tool-use-id>toolu_01NjatuNQ8H5AAFkWqyL4YQL</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a6e9d1d96198db7c2.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 2 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>### Spec Compliance
+
+- ✅ `stage_file(src: Path, dest_name: str) -&gt; Iterator[StagedInput]` exists at `src/plms/io.py:78–91`. Decorated with `@contextmanager`, correct signature.
+- ✅ `check_csv_has_columns(path: Path, required: Iterable[str]) -&gt; None` exists at `src/plms/io.py:94–104`. Raises `InvalidRequestError` on missing columns.
+- ✅ `read_variant_scores(out_dir: Path, result: Result)` exists at `src/plms/io.py:171–173`. Returns `list[dict[str, str | int | float | None]]`.
+- ✅ `_read_csv_artifact(out_dir, result, kind, column_types)` exists at `src/plms/io.py:135–161`. Private helper with correct signature.
+- ✅ `read_likelihoods` refactored at `src/plms/io.py:164–168` — old inlined CSV loop fully removed, now one-liner delegation to `_read_csv_artifact`.
+- ✅ Blank numeric CSV values → `None` at `src/plms/io.py:156–157`: `if caster is not str and value == "": row[key] = None`.
+- ✅ Non-empty numeric values coerced via column-type map at `src/plms/io.py:159`.
+- ✅ String columns untouched (default `caster = str` path falls through to normal cast, which is a no-op for strings).
+- ✅ `stage_file` copies source under `dest_name`, yields `StagedInput` with `container_input_path == "/in/&lt;dest_name&gt;"`, cleans up on exit — confirmed by test at `tests/test_io.py:191–203`.
+- ✅ Stdlib-only (`csv`, `shutil`, `tempfile`) — no pandas added.
+- ✅ `from __future__ import annotations` present (pre-existing, confirmed in diff context line 23).
+- ✅ `import shutil` added at `src/plms/io.py:26`. `InvalidRequestError` added to exceptions import at line 37.
+- ✅ `_SCORE_COLUMN_TYPES` constant added at `src/plms/io.py:54`.
+- ✅ Four required tests added to `tests/test_io.py:191–246`, matching the brief's prescribed test bodies verbatim.
+- ✅ `test_read_likelihoods_coerces_numeric_columns` still passes (reported GREEN, and the refactoring is a transparent delegation).
+- ⚠️ `ty check` shows `error[invalid-return-type]` in `src/plms/models.py:76` — cross-task item, intentionally out of scope for this task per the brief. Correctly identified and documented in the report.
+
+---
+
+### Strengths
+
+- The `_read_csv_artifact` abstraction is clean and genuinely eliminates the duplicated CSV loop. The old `read_likelihoods` body was 13 lines of inlined logic; it is now a one-liner delegation. No leaky abstraction.
+- Blank-to-`None` guard `if caster is not str and value == ""` is precise — it only fires for columns that have an explicit numeric type mapping, so pure-string columns will never silently become `None` even if they happen to be empty.
+- `check_csv_has_columns` opens only the first line (uses `next(csv.reader(...), [])`) — efficient, no unnecessary full-file read.
+- `stage_file` correctly passes `input_filename=dest_name` when constructing `StagedInput`, so `container_input_path` resolves to `/in/&lt;dest_name&gt;` as required, without any ad-hoc string construction in the function itself.
+- Test `test_stage_file_copies_input_under_dest_name` verifies both the in-context state (file exists, path correct) AND the post-exit cleanup (`not held.exists()`), covering the full lifecycle.
+- Ruff clean, no unrelated files touched, scope discipline is exact.
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+
+None.
+
+#### Important (Should Fix)
+
+- **`tests/test_io.py:224` — leaked tempdir from test setup.** `test_stage_file_copies_input_under_dest_name` creates its own `src` file via `tempfile.mkdtemp()` (line 196) but never cleans up that parent directory. The staged temp dir (`held`) is cleaned up correctly, but the directory created by `mkdtemp()` at line 196 is abandoned after the test. This could accumulate across CI runs. Fix: use `tmp_path` fixture (already available to parametrized tests) or wrap in a `tempfile.TemporaryDirectory` context:
+  ```python
+  def test_stage_file_copies_input_under_dest_name(tmp_path: Path) -&gt; None:
+      from plms.io import stage_file
+      src = tmp_path / "v.csv"
+      ...
+  ```
+  The brief specified this exact pattern with `mkdtemp()` verbatim, so this was inherited from the spec, not an implementer error — but worth fixing now that the task is complete.
+
+- **`src/plms/io.py:141` — `_read_csv_artifact` docstring is a one-liner but the function raises.** The raised `OutputParseError` is undocumented in the docstring. For consistency with `read_likelihoods`'s original docstring (which had `Raises:`) and the project's Google-style requirement, the `Raises:` section should be present:
+  ```python
+  """Read a single CSV artifact, coercing numeric columns (blanks -&gt; None).
+
+  Raises:
+      OutputParseError: If no artifact of the given kind is declared in the result.
+  """
+  ```
+
+#### Minor (Nice to Have)
+
+- **`src/plms/io.py:100` — redundant `Path(path)` call.** The parameter is already typed as `Path`. `Path(path).open(...)` works but is cosmetically redundant — `path.open(...)` is cleaner and consistent with how the rest of the file uses `Path` objects.
+
+- **`tests/test_io.py:228` — removed `import json` from test body.** The brief's prescribed test included `import json` inside the function body (line 52 of the brief). The diff moved it — `json.dumps` is used at line 231 but the import does not appear inside the function. Checking whether `json` is already imported at the top of `tests/test_io.py` would clarify whether this was a safe hoist or an accidental deletion; the tests pass so it must be present, but worth noting the divergence from the brief for auditability.
+
+---
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** All four specified functions are present with correct signatures and behavior; `read_likelihoods` is cleanly refactored with no duplication; blank-to-None logic is correct and precise; the test suite covers all required scenarios including cleanup. The only actionable finding (leaked tempdir) was inherited directly from the brief's prescribed test code and doesn't affect correctness.</result>
+<usage><subagent_tokens>26183</subagent_tokens><tool_uses>3</tool_uses><duration_ms>41642</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a00ca67b3ffd2d58b</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a00ca67b3ffd2d58b.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix Task 2 review findings" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>---
+
+**Status:** DONE
+
+**Commit:** a991bdd io: fix stage_file test tempdir leak and _read_csv_artifact docstring
+
+**Tests:** python -m pytest tests/test_io.py -q → 17 tests pass (100%)
+
+**Report:** /home/briney/git/plms/.superpowers/sdd/task-2-report.md</result>
+<usage><subagent_tokens>29558</subagent_tokens><tool_uses>13</tool_uses><duration_ms>30016</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a7b388dc8e14f1082</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a7b388dc8e14f1082.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 3: Model.score" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Status:** Complete.
+
+**Commit:** `c61f9fa` — `models: add Model.score and ScoreResult; generalize run staging`
+
+**Test summary:** 53 passed, 4 skipped (Docker integration); RED confirmed (5 failures before implementation), GREEN confirmed after.
+
+**`ty check src/`:** Clean — zero errors. `LikelihoodResult.rows()` annotation widened from `list[dict[str, str | int | float]]` to `list[dict[str, str | int | float | None]]` to resolve the cross-task gap.
+
+**Concerns:** None.
+
+**Report:** `/home/briney/git/plms/.superpowers/sdd/task-3-report.md`</result>
+<usage><subagent_tokens>51584</subagent_tokens><tool_uses>27</tool_uses><duration_ms>177414</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a33fc2bfe27789a92</task-id>
+<tool-use-id>toolu_01PZfwJvWKTThgrvErmFALTu</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a33fc2bfe27789a92.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 3 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I have all the information needed to write the review. Here it is:
+
+---
+
+### Spec Compliance
+
+- ✅ `ScoreResult` dataclass added at `src/plms/models.py:84–95` with correct fields (`result`, `output_dir`, `method`, `_keepalive`) and `rows() -&gt; list[dict[str, str | int | float | None]]` delegating to `read_variant_scores`.
+- ✅ `Model.score` signature matches spec exactly: `(variants_csv, *, method="masked-marginal", output_dir=None, use_gpu=False, batch_size=None) -&gt; ScoreResult` (`src/plms/models.py:176–212`).
+- ✅ Validation order: capability → method → columns, all before `_run` is called (`models.py:199–210`). The `test_score_invalid_method_raises_before_run` test verifies `last_spec is None` after method rejection; columns check fires before staging likewise.
+- ✅ `_run` refactored to accept a staging context manager (`models.py:245–273`). Old `stage_inputs(records)` call moved out to callers (`embed` at line 149, `likelihood` at line 171–173).
+- ✅ `_read_records` helper extracted (`models.py:230–243`): reads FASTA, raises `InvalidRequestError` on empty, logs warning for overlong sequences — matches spec exactly.
+- ✅ `embed` and `likelihood` preserve identical observable behavior: both now call `_read_records` then pass `stage_inputs(records)` to `_run`, replicating the old combined operation without behavioral change.
+- ✅ `--method &lt;method&gt;` passed as extra args (`models.py:200, 210`). `--batch-size` passed only when given (`models.py:201–203`).
+- ✅ CSV staged as `variants.csv` via `stage_file(path, "variants.csv")` (`models.py:210`); `stage_file` sets `input_filename="variants.csv"` so `container_input_path` becomes `/in/variants.csv` — confirmed by `test_score_builds_expected_command`.
+- ✅ `LikelihoodResult.rows()` return annotation widened from `list[dict[str, str | int | float]]` to `list[dict[str, str | int | float | None]]` (`models.py:79`). Cross-task fix applied.
+- ✅ `ScoreResult` exported from `src/plms/__init__.py` (import at line 18, `__all__` at line 29).
+- ✅ `from __future__ import annotations` present in both changed source files.
+- ✅ All 5 spec-prescribed tests added verbatim. `FakeRunner._write_score` reads the staged `variants.csv`, writes a real `scores.csv` and `result.json` — exercises the full staging/parsing path, not a mock.
+- ✅ `_manifest_json()` default updated to include `"score"`; `test_score_unsupported_capability_raises` uses explicit `capabilities=["embed", "likelihood"]` override.
+- ⚠️ `ty check src/` reported clean by implementer; cannot re-run from diff alone. The `_run`'s `staging` parameter is unannotated (bare name + comment) — this is deliberate to avoid importing `AbstractContextManager` and was noted as keeping `ty` clean. Accepting on the implementer's evidence.
+- ⚠️ `_read_records` return type is `list` (unparameterized) at `models.py:230`. Not a `ty` error in practice (the records are immediately passed to `stage_inputs` which types its parameter as `list[FastaRecord]`) but this is slightly imprecise.
+
+---
+
+### Strengths
+
+- The `_run` refactor is clean and complete: the context manager boundary is correctly placed so the staging directory is alive for the full runner call, and the result is read after the `with` block exits — no resource-lifetime bugs.
+- `FakeRunner._write_score` faithfully simulates the contract: it reads the actual staged `variants.csv`, computes `n_mutations` from the real `mutant` field (colon-split), writes a parseable `scores.csv`, and emits a valid `result.json` with `contract_version: "0.2"`. This means `test_score_returns_rows` exercises the entire client path (staging → container → `read_variant_scores`) rather than just asserting on mock return values.
+- The `_write_score` method uses a hardcoded `contract_version: "0.2"` in its `result.json`, which matches `CONTRACT_VERSION` in `contract.py`. The manifest uses `"0.1"` and the `result.json` uses `"0.2"` — both have major `0`, so `check_contract_compatibility` passes. This is intentional and correct (the score capability is a minor-version addition).
+- `test_score_missing_columns_raises` exercises a real `check_csv_has_columns` call with an actual bad CSV, not a mock.
+- Validation ordering test (`test_score_invalid_method_raises_before_run`) uses `last_spec is None` as proof that `_runner.run` was never called — correct and tight.
+- The `_write_outputs` lazy-read refactor in `FakeRunner` (reading FASTA only inside the `embed`/`likelihood` branches rather than unconditionally before dispatch) is a necessary correctness fix — the old code would have crashed on a score run since there's no `seqs.fasta` in the staging directory for score.
+- No changes to `io.py` or `contract.py` — scope discipline was maintained.
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+
+None.
+
+#### Important (Should Fix)
+
+- **`_read_records` return type is unparameterized `list`** (`src/plms/models.py:230`). Should be `list[FastaRecord]`. The self-review notes this was left as `list` to match the brief's pseudocode, but the brief's pseudocode was not prescriptive about eliding annotations — and a parameterized return type is strictly better for `ty` and readability. The missing import of `FastaRecord` would be needed only if `FastaRecord` isn't already accessible in `models.py`; checking: `read_fasta` is imported from `plms.io` but `FastaRecord` is not. Add `FastaRecord` to the `plms.io` import and annotate `-&gt; list[FastaRecord]`. This is a should-fix, not critical, since `ty` passes as-is.
+
+#### Minor (Nice to Have)
+
+- **`_run`'s `staging` parameter has no type annotation** (`models.py:248`), just a comment. Given the project already uses `from __future__ import annotations` and `TYPE_CHECKING` blocks, `AbstractContextManager[StagedInput]` could be imported under `TYPE_CHECKING` to give it a real type. The comment `# contextmanager[StagedInput]` is adequate for now but inconsistent with the rest of the file's annotation discipline.
+- **`test_score_missing_columns_raises` doesn't assert `last_spec is None`** (`tests/test_models.py:296–301`). Symmetry with `test_score_invalid_method_raises_before_run` would make it explicit that the column check fires before the run. Minor since the validation ordering is covered by the method-check test and the ordering in the source is unambiguous.
+- **`import csv as _csv`** inside `FakeRunner._write_score` (`tests/test_models.py:112`). `csv` is already imported at the top of `test_models.py`... actually, checking: `test_models.py` imports only `json`, `Path`, `numpy`, `pytest`, `plms.*`, and `plms.runner`. `csv` is not at the top-level. The local import is fine but could be hoisted to the module level for consistency with the test file style. Low priority.
+
+---
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** All spec requirements are met — validation ordering is correct, `_run` is properly generalized, embed/likelihood behavior is preserved, `LikelihoodResult.rows()` annotation is widened, `ScoreResult` is correctly exported, and the `FakeRunner` exercises the real staging/parsing path. The only non-trivial gap is the unparameterized `list` return on `_read_records`, which is a typing polish issue that doesn't affect runtime correctness or `ty` status.</result>
+<usage><subagent_tokens>43993</subagent_tokens><tool_uses>8</tool_uses><duration_ms>69747</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ac6b85405eb2c633e</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/ac6b85405eb2c633e.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix Task 3 typing finding" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Perfect! Let me now provide the final report:
+
+**DONE** — `c29be24 models: annotate _read_records return type; tighten score validation test` — `python -m pytest tests/test_models.py -q` → 18 passed — `ty check src/` CLEAN — `/home/briney/git/plms/.superpowers/sdd/task-3-report.md`</result>
+<usage><subagent_tokens>36163</subagent_tokens><tool_uses>15</tool_uses><duration_ms>36341</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a9b9141e309bccc9b</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a9b9141e309bccc9b.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 4: plms score CLI" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Status:** ✅ Complete  
+**Commit:** `44560b5 cli: add plms score command`  
+**Tests:** 1 new test passes; 6/6 CLI tests pass; 67 total pass, 4 skipped  
+**Concerns:** None  
+**Report:** `/home/briney/git/plms/.superpowers/sdd/task-4-report.md`</result>
+<usage><subagent_tokens>36332</subagent_tokens><tool_uses>31</tool_uses><duration_ms>110080</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>adab1bd6929bed315</task-id>
+<tool-use-id>toolu_012qZibSeyjT8X17TVMoVrqb</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/adab1bd6929bed315.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 4 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I have everything I need. Here is the review.
+
+---
+
+### Spec Compliance
+
+- ✅ `src/plms/cli.py:123-147` — Command registered as `@app.command()` with name `score` derived from function name.
+- ✅ `cli.py:125` — `model: _ModelArg` matches spec.
+- ✅ `cli.py:126-128` — `variants: Annotated[Path, typer.Argument(exists=True, dir_okay=False, readable=True, ...)]` exactly as specified.
+- ✅ `cli.py:129` — `output_dir: _OutputOpt` reuses existing alias.
+- ✅ `cli.py:130-133` — `--method` with default `"masked-marginal"`, `str` type.
+- ✅ `cli.py:134` — `gpu: _GpuOpt = False` reuses existing alias.
+- ✅ `cli.py:135` — `batch_size: _BatchOpt = None` reuses existing alias.
+- ✅ `cli.py:142` — `load(model)` called correctly.
+- ✅ `cli.py:143-145` — `model_obj.score(variants, method=method, output_dir=output_dir, use_gpu=gpu, batch_size=batch_size)` — all five keyword args present and correctly named.
+- ✅ `cli.py:146-147` — `PlmsError` caught, routed to `_fail(exc)`.
+- ✅ `cli.py:1-4` — No `from __future__ import annotations` added to `cli.py`.
+- ✅ Scope limited to exactly `src/plms/cli.py` and `tests/test_cli.py` (diff stat: 2 files).
+- ✅ Command placed after `likelihood`, mirroring the existing command ordering pattern.
+- ✅ `tests/test_cli.py:72-78` — `FakeModel.score` method signature matches brief exactly.
+- ✅ `tests/test_cli.py:88-92` — `variants_csv` fixture matches brief exactly.
+- ✅ `tests/test_cli.py:129-145` — `test_score_command_invokes_model` matches brief exactly; patches `plms.cli.load`, asserts exit 0, asserts `method == "score"` and `scoring_method == "wt-marginal"`.
+- ⚠️ `_ModelArg` is defined as `Annotated[str, typer.Argument(...)]` — the `score` command inline-defines the `variants` argument rather than a `_VariantsArg` alias; this is consistent with how `embed`/`likelihood` treat their unique positional arg (`_FastaArg` is defined but each command's unique path arg is inline). No cross-task adapter interface to verify (`model.score` contract is mocked; whether `ScoreResult` is fully implemented is out of scope for this task).
+
+---
+
+### Strengths
+
+- The implementation is a verbatim transcription of the brief's prescribed code — every keyword argument name, order, and default matches.
+- `_ModelArg`, `_OutputOpt`, `_GpuOpt`, `_BatchOpt` are all reused; no new aliases invented unnecessarily.
+- The test patches `plms.cli.load` (not the model class directly), which is the correct level of isolation — it exercises the CLI's dispatch path.
+- `FakeModel.score` stores both `"method": "score"` and `"scoring_method": method`, allowing the test to distinguish which CLI command was called vs. which scoring method was passed — clean design.
+- The `variants_csv` fixture is scoped to `tmp_path` per-test, avoiding state leakage.
+- `ruff format` was run before commit; the diff shows no whitespace noise.
+- `from __future__ import annotations` was not added to `cli.py` (it is correctly present only in `test_cli.py`, which pre-existed it).
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+
+**`test_cli.py:129` — No test for `PlmsError` on `score`**
+The existing `test_plms_error_reported_cleanly_with_exit_1` only covers `embed`. There is no corresponding test verifying that a `PlmsError` raised inside `score` is caught by `_fail` and exits 1 with a clean message (no traceback). Given that `PlmsError` handling is an explicit spec constraint ("catch `PlmsError` → `_fail(exc)`"), there should be at least one test that exercises this path for the `score` command. The `embed` coverage does not substitute because the wiring is per-command. This is a coverage gap, not a structural defect, but the spec specifically calls it out as a mirror of `likelihood`'s structure, and `likelihood` also lacks its own `PlmsError` test — so this is a pre-existing gap being perpetuated rather than introduced.
+
+**`cli.py:144` — Summary message trailing double-space**
+`f"written to [bold]{output_dir}[/bold]  method={method}"` has two spaces before `method=`. Both `embed`'s second `console.print` line and `likelihood`'s single line use consistent single-space separation. This is a minor aesthetic inconsistency but is visible in terminal output.
+
+#### Minor (Nice to Have)
+
+**`test_cli.py:129` — Default method not tested**
+The test only exercises `--method wt-marginal`. The default (`masked-marginal`) is never invoked in any test. A second parametrize case or a separate test invoking the command without `--method` would confirm the default flows through correctly. Not a blocker, but easy to add.
+
+**`cli.py:136` — Docstring is minimal but acceptable**
+`"""Score sequence variants for effect."""` matches the Typer help string shown in the CLI output. All other commands have one-liner docstrings too, so this is consistent — just noting it.
+
+---
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** All spec requirements are met exactly — command signature, argument types, keyword argument names, error handling, alias reuse, and scope. The one substantive gap (no `PlmsError` test on `score`) is a coverage omission rather than a correctness defect, and it mirrors a pre-existing pattern in the test suite. The double-space in the summary message is cosmetic. The implementation is safe to merge; the coverage gap should be addressed in a follow-up or in the `PlmsError` test task if one exists.</result>
+<usage><subagent_tokens>27528</subagent_tokens><tool_uses>5</tool_uses><duration_ms>43849</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a75f9270513a6eb87</task-id>
+<tool-use-id>toolu_01SWdCn4ac1yyBp1Cj4CnZba</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a75f9270513a6eb87.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix Task 4 CLI findings" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Status**: DONE
+**Commit**: `1883682 cli: tidy score summary spacing; add score error + default-method tests`
+**Tests**: 8/8 pass (2 new error/default-method tests + 6 existing)
+**Report**: `/home/briney/git/plms/.superpowers/sdd/task-4-report.md`</result>
+<usage><subagent_tokens>30055</subagent_tokens><tool_uses>16</tool_uses><duration_ms>36864</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a934133fc3f3efb62</task-id>
+<tool-use-id>toolu_01XAW9EgstTJLNXQENNUiNW2</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a934133fc3f3efb62.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 5: document score in CONTRACT.md" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Perfect! Task 5 is complete. Here's the summary:
+
+**Status:** ✓ Complete
+
+**Commit:** `ecfb786` — `docs: document the score capability in CONTRACT.md (v0.2)`
+
+**Tests:** ✓ `pytest tests/test_contract.py -q` → 18 passed (no drift)
+
+**Concerns:** None — all edits match authoritative fixtures and code.
+
+**Report:** `/home/briney/git/plms/.superpowers/sdd/task-5-report.md`</result>
+<usage><subagent_tokens>33565</subagent_tokens><tool_uses>20</tool_uses><duration_ms>68984</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aed7cc95195a9290e</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/aed7cc95195a9290e.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 5 (docs)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I have all the information needed to render the full verdict.
+
+---
+
+### Spec Compliance
+
+- ✅ **Header (line 3):** Contract version bumped from `0.1` to `0.2`.
+- ✅ **Section 2 – Internal CLI:** `score` subcommand promoted to implemented with the exact required signature: `score --input /in/variants.csv --output /out [--method masked-marginal|wt-marginal] [--batch-size N] [--device cpu|cuda]`.
+- ✅ **Section 2 – Reserved block:** `score` removed from reserved block; `generate` remains the only reserved entry. Wording updated to "not yet implemented".
+- ✅ **Section 3 – Manifest worked example:** `contract_version` updated to `"0.2"`; `capabilities` now `["embed", "likelihood", "score"]`. Matches `tests/data/manifest.example.json` exactly (byte-for-byte field values confirmed).
+- ✅ **Section 4 – Inputs:** `score (reserved)` → `score` with reference to `/in/variants.csv` and the schema below.
+- ✅ **Section 4 – Outputs table:** `score` row added (`scores.csv (schema below).`).
+- ✅ **Section 4 – `variants.csv` input schema:** All three required columns documented (`variant_id`, `wt_sequence`, `mutant`) with correct semantics: 1-indexed `{WT}{pos}{MUT}`, colon-separated multi-mutants, self-substitution scores exactly 0.
+- ✅ **Section 4 – `scores.csv` output schema:** All four required columns documented (`variant_id`, `mutant`, `n_mutations`, `score`). Invalid-row handling (blank score + `result.warnings` entry) noted correctly; batch-does-not-fail implied by "blank if the variant is invalid … See `result.warnings`."
+- ✅ **Section 5 – OutputArtifact kinds:** `variant_scores_csv` added to the `kind` enumeration.
+- ✅ **Section 5 – Embed worked example:** `contract_version` updated to `"0.2"`; heading renamed to "Worked example (embed)".
+- ✅ **Section 5 – Score worked example:** Added, referencing `tests/data/result.score.example.json`. All fields match the fixture exactly: `contract_version "0.2"`, `capability "score"`, artifact `kind "variant_scores_csv"`, `record_ids ["self", "single", "double"]`, `params {"method": "masked-marginal"}`.
+- ⚠️ **Section 6 – ContainerError worked example (line 256):** The example JSON still shows `"contract_version": "0.1"`. This is an untouched line; the diff does not touch it.
+
+---
+
+### Strengths
+
+- Every column name, artifact kind, flag name, and version string is identical to what appears in the real fixtures — zero transcription errors.
+- The `variants.csv` schema description is precise: all three semantic nuances (1-indexed, multi-mutant colon separator, self-substitution = 0) are in a single table cell, matching the brief exactly.
+- The `scores.csv` schema correctly ties invalid-row handling to `result.warnings` and uses "blank" rather than "null", consistent with a CSV representation.
+- `generate` is cleanly reserved; no ambiguity about what is and isn't implemented at `0.2`.
+- Internal cross-references (section headings → fixture file links) are all correct and use relative paths consistent with the existing document style.
+- The diff is tightly scoped: only `docs/CONTRACT.md`, exactly one commit, no noise.
+
+---
+
+### Issues
+
+#### Important (Should Fix)
+
+**Section 6, ContainerError example — stale `"contract_version": "0.1"` (line 256 of current file)**
+
+The error-contract fenced-code block was not updated:
+
+```json
+{"contract_version": "0.1", "error_type": "SequenceTooLong", ...}
+```
+
+The document now asserts in two places that the contract is `0.2`. A reader who notices this discrepancy will question whether the error payload is supposed to lag the contract version or whether the doc was incompletely updated. This is not a schema fact (errors MAY carry the version at the time they were written, and `ContainerError.contract_version` is `string | null`), but it is still a confusing inconsistency worth fixing. Change to `"0.2"` to be internally consistent with every other version reference in the document.
+
+#### Minor (Nice to Have)
+
+**Section 4 – Outputs table wording inconsistency:** The `score` row reads `scores.csv (schema below).` with a trailing period, while the `likelihood` row reads `likelihoods.csv (schema below).` also with a period — so this is actually consistent. No action needed; just flagging it was checked.
+
+**Section 4 – Input table note on self-substitution:** The phrase "A self-substitution (e.g. `A24A`) scores exactly 0" is accurate and is the clearest prose phrasing of the spec. Nothing to change.
+
+---
+
+### Assessment
+
+**Task quality:** Approved (with one minor follow-up recommended)
+
+**Reasoning:** All required sections are updated, every documented detail matches the authoritative fixtures exactly, internal consistency is high, and the document style is preserved throughout. The only gap is a stale `"0.1"` in the Section 6 ContainerError example that was not in scope of any required section but creates a small internal contradiction; it is straightforward to fix in a follow-on touch.</result>
+<usage><subagent_tokens>24207</subagent_tokens><tool_uses>7</tool_uses><duration_ms>47963</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a55e551653be650d7</task-id>
+<tool-use-id>toolu_01HZ1gHK8LYspVqk8cwoMy8t</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a55e551653be650d7.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 6: ESM2 cmd_score" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>---
+
+**Status:** Complete.
+
+**Commit:** `315818a` — `esm2: implement score (masked-marginal + wt-marginal) at contract 0.2`
+
+**Test summary:** 15/15 passed — 7 pre-existing + 8 new `parse_mutant` tests (RED: 8 `AttributeError` failures; GREEN: all pass after implementation).
+
+**Concerns:** `output_dir` is assumed to exist (same as `cmd_likelihood`); `convert_tokens_to_ids("X")` yields `&lt;unk&gt;` silently; both are consistent with existing patterns and will surface in Task 7 end-to-end testing.
+
+**Report:** `/home/briney/git/plms/.superpowers/sdd/task-6-report.md`</result>
+<usage><subagent_tokens>38271</subagent_tokens><tool_uses>20</tool_uses><duration_ms>145153</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ad496a7deaddd6383</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/ad496a7deaddd6383.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 6 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I have everything I need to conduct the full review. Let me now analyze the implementation carefully against the spec.
+
+---
+
+### Spec Compliance
+
+- ✅ [entrypoint.py:23] `CONTRACT_VERSION = "0.2"` — correctly bumped from 0.1.
+- ✅ [entrypoint.py:29] `_MUTANT_RE = re.compile(r"^([A-Za-z])(\d+)([A-Za-z])$")` — correctly placed alongside other module-level regex constants, outside torch.
+- ✅ [entrypoint.py:90-98] `parse_mutant` correctly parses `A24G` → `[("A", 24, "G")]`, `A24G:T56S` → two tuples. `.upper()` is applied to both amino acid characters.
+- ✅ [entrypoint.py:94] `_MUTANT_RE` rejects `""`, `"24G"` (no leading letter), `"AG"` (no digits), `"A2"` (no trailing letter), `"AxG"` (x is letter, so this actually PASSES the regex — wait, let me re-check).
+
+Let me re-examine `_MUTANT_RE = r"^([A-Za-z])(\d+)([A-Za-z])$"` against `"AxG"`:
+- `A` matches `[A-Za-z]`
+- `x` is a letter, not a digit — `\d+` requires one or more digits, so `x` does NOT match `\d+`
+- The match fails, `ValueError` is raised. ✅
+
+- ✅ [entrypoint.py:94] `"A-1G"` — the `-` is not a digit, so `\d+` fails to match. `ValueError` raised. ✅
+- ✅ [entrypoint.py:94] `""` — `split(":")` on `""` yields `[""]`; `_MUTANT_RE.match("")` returns `None`; `ValueError` raised. ✅
+- ✅ [entrypoint.py:97] Self-substitution `M1M` — regex matches, returns `[("M", 1, "M")]`.
+- ✅ [tests/test_esm2_entrypoint.py:285-297] All three `parse_mutant` test functions match spec verbatim.
+
+**Token indexing:**
+- ✅ [entrypoint.py:319] `input_ids = tokenizer(seq, ...)["input_ids"][0]` → shape `(L+2,)`, index 0 is `&lt;cls&gt;`, index 1..L are residues, index L+1 is `&lt;eos&gt;`. 1-indexed position `pos` maps to token index `pos`. This is consistent with `_pseudo_log_likelihood` at line 290 which uses `range(1, len(input_ids) - 1)`.
+- ✅ [entrypoint.py:326] `batch[row, pos] = tokenizer.mask_token_id` — masks at token index `pos` which equals 1-indexed position. Correct.
+- ✅ [entrypoint.py:331] `out[pos] = log_probs[row, pos].cpu().numpy()` — extracts logprob vector at token index `pos`. Consistent.
+- ✅ [entrypoint.py:342] `log_probs = torch.log_softmax(...)[0].cpu().numpy()` → shape `(L+2, V)`; `log_probs[pos]` extracts vector at token index `pos`. Consistent.
+
+**Range check before `logp_by_pos[pos]` indexing:**
+- ✅ [entrypoint.py:354-358] `_score_variant` checks `1 &lt;= pos &lt;= len(wt_seq)` BEFORE accessing `logp_by_pos[pos]` at line 358. Since `_valid_positions` only adds positions satisfying `1 &lt;= pos &lt;= len(wt_seq)`, all positions in `logp_by_pos` are in-range. The range check in `_score_variant` also guards against cases where a mutant's position was valid during `_valid_positions` scan but is caught here again for defense. No KeyError possible. ✅
+
+**Scoring math:**
+- ✅ [entrypoint.py:361] `total += float(vec[mut_id] - vec[wt_id])` — direction is `logP(mut) − logP(wt)`, matching spec. ✅
+- ✅ Self-sub: `wt_aa == mut_aa` → `wt_id == mut_id` → difference is 0.0 exactly. ✅
+- ✅ Multi-substitution: scores are summed over substitutions. ✅
+
+**Per-row validation (no batch failure):**
+- ✅ [entrypoint.py:387-392] Invalid `_score_variant` returns `(None, n, err_msg)`; `cmd_score` appends to `warnings` and writes empty `score_str = ""`; loop continues. No exception propagation. ✅
+- ✅ [entrypoint.py:354-357] WT residue mismatch and out-of-range both return `(None, ...)` without raising. ✅
+
+**CSV columns:**
+- ✅ [entrypoint.py:379] Header exactly `"variant_id,mutant,n_mutations,score"`. ✅
+
+**Artifact kind:**
+- ✅ [entrypoint.py:400] `"kind": "variant_scores_csv"`. ✅
+
+**result.json fields:**
+- ✅ [entrypoint.py:405] `"contract_version": CONTRACT_VERSION` (= "0.2"). ✅
+- ✅ [entrypoint.py:406] `"capability": "score"`. ✅
+- ✅ [entrypoint.py:412] `"params": {"method": args.method, "device": ...}` — `method` included. ✅
+
+**Manifest capability:**
+- ✅ [entrypoint.py:172] `"capabilities": ["embed", "likelihood", "score"]`. ✅
+
+**Parser registration:**
+- ✅ [entrypoint.py:475-483] `score` subparser registered with `--input`, `--output`, `--method {masked-marginal,wt-marginal}` (default `masked-marginal`), `--batch-size`, `--device`. ✅
+
+**Heavy imports inside functions:**
+- ✅ [entrypoint.py:316] `import torch` inside `_masked_position_logprobs`. ✅
+- ✅ [entrypoint.py:337] `import torch` inside `_wt_position_logprobs`. ✅
+- ✅ [entrypoint.py:367] `import csv as csv_module` inside `cmd_score`. ✅
+- ✅ `parse_mutant`, `_valid_positions`, `_MUTANT_RE` — all pure, no torch. ✅
+
+**`_valid_positions` placement:**
+- ✅ [entrypoint.py:101-111] Placed in the pure-helpers section (before `# --- contract I/O ---`), consistent with the spec's placement intent and import discipline. ✅
+
+⚠️ `_valid_positions` is placed in the pure-helpers section but it isn't actually pure-helper in the strict sense (it depends on `parse_mutant` and processes input rows). This is cosmetic — functionally it IS importable without torch, so it's correct, just note the placement.
+
+**One issue to flag — `_score_variant` early return on first bad substitution in multi-sub variants:**
+- [entrypoint.py:354-357] When a multi-substitution variant (e.g., `A24G:T56S`) has an out-of-range or WT-mismatch at the first sub, the function early-returns immediately without checking the remaining substitutions. This is correct per spec ("invalid rows → blank score + warning"), but note the implication: if position 1 passes but position 2 fails, the function partial-scores up to the failure and returns `None` with `len(subs)` — it does NOT return a partial score. This is the correct specified behavior. ✅
+
+⚠️ However, there is a subtle inconsistency: on parse failure `return None, 0, str(exc)` returns `n_mutations=0`, but on range/mismatch failure `return None, len(subs), f"..."` returns the full count. The CSV will write `n_mutations=0` for malformed mutants vs. `n_mutations=2` for a malformed but parseable multi-sub with position error. The spec does not prescribe `n_mutations` for error rows, so this is not a spec violation — but it's slightly inconsistent.
+
+---
+
+### Strengths
+
+1. Token index math is carefully correct and consistent with the existing `_pseudo_log_likelihood` implementation — positions are 1-indexed into the `(L+2,)` token tensor because `&lt;cls&gt;` occupies index 0.
+2. The two-stage design (`_valid_positions` pre-filters positions for the model, `_score_variant` re-validates at scoring time) eliminates the KeyError risk cleanly. The defense-in-depth is well done.
+3. `parse_mutant` correctly handles the `.strip()` call on tokens before regex matching, which means `"A24G : T56S"` with spaces would parse (graceful tolerance). The `.upper()` calls normalize lowercase amino acid codes.
+4. The `_masked_position_logprobs` batching mirrors exactly the existing `_pseudo_log_likelihood` pattern — same `input_ids.repeat(len(chunk), 1)` idiom with in-place masking.
+5. `cmd_score` uses `write_result` directly (not `_write_capability_result`) because it adds `method` to `params` that `_write_capability_result` doesn't support. This is correct; the implementer didn't force it into the shared helper.
+6. Self-sub scores 0 by arithmetic identity — no special-case branching needed or added.
+7. Ruff clean; tests match spec verbatim including the six `bad` parametrize cases.
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+
+None identified. The scoring math direction, token indexing, range-before-lookup ordering, blank-score-on-error, CSV columns, artifact kind, manifest, parser, and CONTRACT_VERSION are all correct.
+
+#### Important (Should Fix)
+
+**[entrypoint.py:358] Potential KeyError for the `wt-marginal` path when `positions` is empty.**
+If `_valid_positions` returns an empty set (e.g., every row in the group has a malformed mutant), `_wt_position_logprobs` still runs a full forward pass and constructs `{}`. Then `_score_variant` is called; since all mutants were malformed, `parse_mutant` raises and the function returns `(None, 0, err)` — no lookup into `logp_by_pos`. No KeyError. On closer inspection this is fine. Withdrawing this concern — it's safe.
+
+**[entrypoint.py:197, line ~388] `_score_variant` receives `seq` (post-truncation) as `wt_seq`, but the original `row["mutant"]` still refers to positions in the untruncated sequence.** If a row's WT residue is, say, at position 1025 in the original 1200-residue sequence, `_valid_positions` correctly excludes it (uses truncated `seq`), `_score_variant` returns an out-of-range error, the row gets a blank score and a warning entry — all correct. This is actually the correct behavior per spec ("stated WT residue must equal `wt_sequence[pos-1]`, `1 ≤ pos ≤ len(wt_seq)`" with `wt_seq` being the truncated version). ✅ No issue.
+
+**Implementer concern (a): `output_dir` assumed to exist.**
+This is consistent with `cmd_likelihood` at line 278 which also calls `(output_dir / "likelihoods.csv").write_text(...)` without mkdir. The pattern is identical across both subcommands. This is an existing limitation of the contract design (the container runner pre-creates the output dir), not a regression introduced by this task. **Acceptable** — out of scope for this task.
+
+**Implementer concern (b): `convert_tokens_to_ids` on unknown residue → `&lt;unk&gt;` id, score computed silently.**
+This is a real edge case. For standard 20 amino acids + common non-standard ones (`X`, `B`, `Z`), ESM2 tokenizes them. For truly unknown characters, the `&lt;unk&gt;` id would be used and the score computed against `&lt;unk&gt;` logprobs — which is meaningless but not an error. The implementer correctly notes this is consistent with upstream ESM2 paper implementations. The spec does not require validation of amino acid characters beyond WT-residue matching. **Acceptable** — out of scope per spec. The WT-residue check (`wt_seq[pos - 1] != wt_aa`) already catches mismatches. An unknown mut_aa would silently get a score against `&lt;unk&gt;`, which is a minor undetected case — but the spec doesn't prescribe otherwise.
+
+#### Minor (Nice to Have)
+
+- [entrypoint.py:350] `return None, 0, str(exc)` on parse failure returns `n_mutations=0` whereas `return None, len(subs), f"..."` on range/mismatch returns the actual count. The blank CSV row would show `n_mutations=0` for a malformed mutant vs. the actual count for a parseable-but-invalid mutant. Slightly inconsistent, not spec-mandated either way.
+- [entrypoint.py:315-332] `_masked_position_logprobs` takes `batch_size` as a parameter but `_wt_position_logprobs` doesn't (it does a single full forward pass). This is correct and intentional (wt-marginal doesn't need positional batching), but having mismatched signatures means callers must remember which helper takes which args. Low impact.
+- [entrypoint.py:101] `_valid_positions` is placed in the `# --- pure helpers ---` section but is not exported as public API. Placing it there is consistent with import discipline (no torch dependency), so this is fine.
+
+---
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** All spec-mandated behaviors are correctly implemented — scoring math direction, token index alignment, range-before-lookup guard, per-row blank-score-on-error (no batch failure), CSV columns, artifact kind, manifest capability, parser registration, and `CONTRACT_VERSION = "0.2"`. The implementer's two flagged concerns are both acceptable and consistent with existing container patterns. No critical or important defects were found.</result>
+<usage><subagent_tokens>34789</subagent_tokens><tool_uses>4</tool_uses><duration_ms>82429</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a2826bbd044f3eb50</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a2826bbd044f3eb50.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 7: score integration" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>---
+
+**Status: COMPLETE**
+
+**Commit:** `1feff57` — `test: end-to-end score integration on ESM2 (self-mutation scores 0)`
+
+**Tests:** 7 integration tests pass (including 3 new score tests); 95 unit tests pass, 7 integration tests auto-skipped without the env flag.
+
+**Self-substitution score:** Exactly `0.0` under both masked-marginal and wt-marginal methods.
+
+**Concerns:** None. All verification gates (ruff check, ruff format, ty check, unit suite, integration suite) are clean/green.
+
+**Report:** `/home/briney/git/plms/.superpowers/sdd/task-7-report.md`</result>
+<usage><subagent_tokens>29182</subagent_tokens><tool_uses>25</tool_uses><duration_ms>188653</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ac07c9780bfc70845</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/ac07c9780bfc70845.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 7 (integration)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All imports are confirmed. Here is the full review:
+
+---
+
+### Spec Compliance
+
+- ✅ `tests/data/variants.csv` created with correct columns: `variant_id,wt_sequence,mutant`
+- ✅ WT sequence `MTYKLILNGKTLKGETTTEAVDAATAEKVFKQYANDNGVDGEWTYDDATKTFTVTE` (56 aa) matches spec exactly on all three rows
+- ✅ Mutation validity: position 1 = `M` (M1M self-sub valid; M1L reference valid); position 2 = `T` (T2A reference valid). All mutation strings are correctly grounded in the WT.
+- ✅ Three rows present: `self`/`M1M`, `single`/`T2A`, `double`/`M1L:T2A` — exact spec values
+- ✅ `VARIANTS_CSV` path constant added at module level (`tests/test_integration_esm2.py:26`)
+- ✅ `test_score_masked_marginal_end_to_end` present; asserts `set(rows) == {"self","single","double"}`, `self` score ≈ 0.0 (abs=1e-5), `n_mutations` 1/1/2, `single` score finite
+- ✅ `test_score_wt_marginal_runs` present; asserts `self` ≈ 0.0, `double` finite
+- ✅ `test_manifest_now_declares_score` present; asserts `"score"` in capabilities via `.value` enum unwrap
+- ✅ All three new tests inherit module-level `pytestmark` (`slow` + `skipif` on `PLMS_RUN_DOCKER_TESTS=1`) — gating is correct and automatic
+- ✅ `math` already imported at line 11; no missing imports for new tests
+- ✅ Scope strictly observed: only two files changed, exactly as specified
+- ✅ Commit message matches spec: `test: end-to-end score integration on ESM2 (self-mutation scores 0)`
+- ⚠️ `test_score_wt_marginal_runs` does not assert `set(rows)` completeness — all three rows present is only verified by the masked-marginal test. Not a spec gap (spec says "self ≈ 0.0, double finite"), but worth noting.
+
+### Strengths
+
+- Mutation validity is definitively correct: M at position 1 and T at position 2 of the WT sequence are confirmed character-by-character. The self-substitution M1M is guaranteed to score 0.0 by construction, making the `abs=1e-5` assertion a hard correctness gate, not a flaky numeric check.
+- The three-test structure cleanly separates concerns: data completeness + method correctness (masked-marginal), method parity (wt-marginal), and manifest contract (capabilities).
+- Gating is inherited from the module `pytestmark`; no per-function `skipif` duplication, consistent with existing tests.
+- `n_mutations` assertions on both `self` (1) and `double` (2) provide structural correctness checks beyond just the score value.
+- `math.isfinite` on the non-trivial rows guards against NaN/Inf without over-specifying the numeric value — correct calibration for a non-deterministic forward pass.
+- `tmp_path / "sc"` used for both score tests; since `tmp_path` is function-scoped in pytest, there is no fixture collision between the two tests despite the same subdirectory name.
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+- `tests/test_integration_esm2.py:118-122` — `test_score_wt_marginal_runs` does not assert `set(rows) == {"self", "single", "double"}`. If the scoring implementation returns fewer rows (e.g., a blank-score row is silently dropped), the wt-marginal test would still pass because it only accesses `rows["self"]` and `rows["double"]` by key. This means the completeness check is only covered by masked-marginal; a regression in wt-marginal row output would not be caught.
+
+#### Minor (Nice to Have)
+- The `self` score finiteness is implicitly guaranteed by `pytest.approx(0.0, abs=1e-5)`, but an explicit `math.isfinite(float(rows["self"]["score"]))` call (as used for `single` and `double`) would make the pattern consistent and aid readability.
+- `test_score_wt_marginal_runs` could also assert `rows["single"]` score is finite for symmetry with the masked-marginal test, though this is purely a coverage nicety.
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** The CSV data is mutation-valid against the WT sequence, the three required tests are present with correctly calibrated assertions (self≈0 is mathematically deterministic and not a flaky tolerance check), and gating is properly inherited. The one gap — missing `set(rows)` completeness check in `test_score_wt_marginal_runs` — is an "important should-fix" but does not break the spec's stated requirements for that test.</result>
+<usage><subagent_tokens>24506</subagent_tokens><tool_uses>6</tool_uses><duration_ms>38257</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a8443d8586d145b39</task-id>
+<tool-use-id>toolu_01FZjn2NX2u3Zjsco4eykwyB</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a8443d8586d145b39.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix Task 7 test completeness" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Status:** DONE
+
+**Commit:** `1e38044 test: assert row completeness in wt-marginal score integration test`
+
+**Test result:** `PLMS_RUN_DOCKER_TESTS=1 python -m pytest tests/test_integration_esm2.py::test_score_wt_marginal_runs -q` → 1 passed
+
+**Ruff:** All checks passed, file already formatted
+
+**Report:** `/home/briney/git/plms/.superpowers/sdd/task-7-report.md` (appended Fix pass section)</result>
+<usage><subagent_tokens>22490</subagent_tokens><tool_uses>8</tool_uses><duration_ms>28912</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ab487fae560ee655a</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/ab487fae560ee655a.output</output-file>
+<status>completed</status>
+<summary>Agent "Final whole-branch review" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I now have everything I need. Let me do one final verification on a subtle math correctness point: the `n_mutations` counting consistency between malformed parse (returns 0) vs valid-but-out-of-range (returns `len(subs)`), and confirm that the integration test's `single` variant `T2A` is genuinely a non-zero score (it is a real substitution). Let me also confirm there is no issue with the wt-marginal scoring giving exactly 0 for self-subs — at a self-sub, `vec[mut_id] - vec[wt_id]` where mut_aa == wt_aa gives exactly 0 regardless of method, which is why both methods score self-sub as 0. Correct and matches the integration test.
+
+Let me verify one potential real bug: the `_truncate` warning uses literal `"&lt;wt&gt;"` as record_id for all WT groups, which would be an unhelpful warning, and whether truncated WT sequences could cause silent score corruption. Let me check the git log to confirm commit count and check the design spec's stated requirements once more around the additive multi-mutant and the `params` echo.
+
+The implementation looks solid. I have enough to write the review. Let me confirm the CSV-injection concern is genuine: the container writes output CSV via f-string interpolation (`f"{row['variant_id']},{row['mutant']},..."`) rather than `csv.writer`. Since `variant_id` and `mutant` come from user-provided CSV cells, a comma or newline in those fields would corrupt the output CSV. This is a real robustness gap, though `mutant` is regex-constrained and `variant_id` is typically clean. Worth flagging as Minor/Important depending on likelihood.
+
+I have completed my analysis. Here is my review.
+
+---
+
+### Strengths
+
+The branch is genuinely well-executed and faithful to its plan. Specific things done right:
+
+- **Architecture discipline holds.** The client stays ML-free: `io.py` imports only stdlib `csv`/`shutil`/`tempfile` + `numpy`; `models.py` and `cli.py` import no torch/transformers/pandas. The "scoring math lives in the container" principle from the design spec (`docs/.../2026-06-19-score-variant-scoring-design.md`) is respected exactly.
+- **The `_run` staging refactor is clean and preserves behavior.** Generalizing `_run` to take a staging context manager (`models.py:247-275`) rather than a FASTA path lets `embed`/`likelihood`/`score` share one code path. Embed/likelihood bodies (`models.py:144-176`) are unchanged in observable behavior, and the existing tests guard the regression.
+- **DRY without over-abstraction.** `_read_csv_artifact` (`io.py:217-242`) factors the likelihoods/scores CSV readers behind a `column_types` table; the blank→`None` coercion is handled in one place and tested for both readers.
+- **Token alignment is correct.** The 1-indexed `pos` maps directly to `input_ids[pos]` because ESM2 prepends `&lt;cls&gt;` at index 0 — consistent with the pre-existing `_pseudo_log_likelihood` (`entrypoint.py:290` uses `range(1, len(input_ids)-1)`). The masked/wt logprob helpers index `log_probs[..., pos]` the same way (`entrypoint.py:331, 343`).
+- **Scoring math is right.** `logP(mut) − logP(wt)` summed over subs (`entrypoint.py:361`); self-substitution is exactly `0.0` for *both* methods because `vec[mut_id] - vec[wt_id]` with `mut==wt` is structurally zero — and the integration test asserts this deterministically (`test_integration_esm2.py:112, 122`).
+- **Invalid-row handling matches the Global Constraint:** blank score + a `result.warnings` entry, batch does not fail (`entrypoint.py:387-392`). The `_valid_positions`/`_score_variant` range checks are mutually consistent, so `logp_by_pos[pos]` never raises `KeyError`.
+- **Contract drift-guard is real.** `test_contract.py:154-157` validates the new `result.score.example.json`, and the doc's manifest/version examples match the checked-in fixtures.
+- **The FakeRunner faithfully simulates the contract** — it reads the *actually staged* `variants.csv`, groups nothing but parses `mutant` for `n_mutations`, and writes a 0.2 `result.json` with the right artifact kind (`test_models.py:111-132`).
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+
+**1. Output CSV is built by f-string interpolation, not a CSV writer — unescaped user data (`entrypoint.py:392`, `:379`).**
+```python
+out_rows.append(f"{row['variant_id']},{row['mutant']},{n_mut},{score_str}")
+```
+`variant_id` is copied verbatim from the user's input CSV. If any `variant_id` contains a comma, quote, or newline, the output `scores.csv` becomes misaligned, and `read_variant_scores` will then mis-parse or coerce-fail (e.g. a stray column shifts `score` into a non-float cell, raising `ValueError` inside `_read_csv_artifact` and failing the whole read). The input side is parsed correctly with `csv.DictReader`, so the asymmetry is the bug: the contract says `variant_id` is "a unique identifier" with no charset restriction. `mutant` is regex-constrained so it's safe, but `variant_id` is not. Fix: write with `csv.writer`/`csv.DictWriter` so fields are quoted, mirroring how the input is read. This matters because it's a silent data-corruption path triggered by ordinary user ids like `"clone_1,rep2"`.
+
+#### Minor (Nice to Have)
+
+**2. Stale "reserved" comments on `Capability.SCORE` (`contract.py:26`) and `build_parser`-adjacent docstring (`entrypoint.py:5-7`).**
+- `contract.py:26`: `SCORE = "score"  # reserved for a future contract minor version` — score is now implemented at 0.2; the comment is misleading. (This is the Task 1 roll-up item.)
+- `entrypoint.py:5-7`: the module docstring still says it "Exposes the `manifest`, `embed`, and `likelihood` subcommands" — `score` is missing. Worth updating since this file is the container's self-documentation.
+
+**3. `n_mutations` is inconsistent for invalid rows (`entrypoint.py:351` vs `:355,357`).** A malformed `mutant` yields `n_mutations=0`; an in-range/mismatch failure yields `len(subs)`. Not spec-mandated either way (Task 6 roll-up), and the score is blank regardless, so downstream impact is nil. Leave as-is or normalize to `len(subs)` where parseable — your call. Mentioning only so it's a conscious decision.
+
+**4. `_run`'s `staging` parameter is comment-annotated only (`models.py:250`).** `staging,  # contextmanager[StagedInput]` has no real type. Since `ty check src/` passes, this is purely cosmetic, but `AbstractContextManager[StagedInput]` under `TYPE_CHECKING` would make it self-documenting. (Task 3 roll-up.)
+
+**5. WT-group truncation warning uses a fixed `"&lt;wt&gt;"` id (`entrypoint.py:381`).** If two different WT sequences both exceed `max_sequence_length`, both warnings read `sequence '&lt;wt&gt;' truncated...` with no way to tell which group. Low impact (1024 is large; the test WTs are 56 aa), but a `variant_id`-derived label would be friendlier. The design spec explicitly contemplates "variants referencing truncated-away positions become invalid rows," and that path works correctly here — this is only about warning legibility.
+
+**6. Test docstring gap (`test_contract.py:154`).** `test_documented_score_result_example_validates` lacks the one-line docstring its sibling tests have. Trivial. (Task 1 roll-up.)
+
+### Recommendations
+
+- Fix issue #1 before merge — it's the only one with a correctness/data-integrity consequence, and the fix is a few lines (swap the two f-string `write_text` blocks for `csv.writer`). Everything else is safely deferrable.
+- Consider a single follow-up commit sweeping the stale comments (#2) and the module docstring, since they're the kind of thing that rots fast as `generate` lands next.
+- The roll-up items #3–#6 are all legitimately Minor; none should block.
+
+### Assessment
+
+**Ready to merge?** With fixes
+
+**Reasoning:** The implementation is faithful to the plan and design spec, the cross-cutting contract↔client↔container agreement is sound, the scoring math is verified correct (including the deterministic self-sub=0 check), and the client stays ML-free. The one issue worth gating on is the unescaped f-string CSV writer (#1), which can silently corrupt output for `variant_id` values containing commas; everything else is Minor and safe to defer.</result>
+<usage><subagent_tokens>105936</subagent_tokens><tool_uses>19</tool_uses><duration_ms>90281</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a6a016d4784bea65e</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a6a016d4784bea65e.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix final-review CSV-writer bug" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Status: DONE**
+
+**Commit:** `fa65ec5` — esm2: write scores.csv via csv.writer; refresh stale score docs/comments
+
+**Unit tests:** 70 passed, 7 skipped (docker-gated, expected)
+
+**Integration tests:** 7/7 passed (PLMS_RUN_DOCKER_TESTS=1)
+
+**Self-sub score observed:** 0.0 (both masked-marginal and wt-marginal, within abs=1e-5)
+
+**Report:** `/home/briney/git/plms/.superpowers/sdd/final-fix-report.md`</result>
+<usage><subagent_tokens>36684</subagent_tokens><tool_uses>18</tool_uses><duration_ms>120643</duration_ms></usage>
+</task-notification>
+
+---
+
+PR merged and branch deleted on origin. Switch back to main and let's get started on the next sub-project: generate + ProGen2
+
+---
+
+Looks good, proceed
+
+---
+
+spec is approved
+
+---
+
+subagent-driven
+
+---
+
+<task-notification>
+<task-id>af761dd8a9ffcc622</task-id>
+<tool-use-id>toolu_01MnqFGpczSVzocTARom7EjV</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/af761dd8a9ffcc622.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 1: contract 0.3" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Perfect! Now let me provide the final report as required (under 15 lines):
+
+---
+
+**DONE**
+
+Commit: `6dae161 contract: bump to 0.3 and add generated_fasta artifact kind`
+
+Test summary: 19 contract tests pass (18 existing + 1 new generate validation); full suite: 62 passed, 7 skipped; all code quality checks clean (ruff, ty).
+
+Concerns: None.
+
+Report: `/home/briney/git/plms/.superpowers/sdd/task-1-report.md`</result>
+<usage><subagent_tokens>33810</subagent_tokens><tool_uses>27</tool_uses><duration_ms>75958</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ae73a8342e4fee801</task-id>
+<tool-use-id>toolu_014AovrXcqyc6FxZGWUhvvBx</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/ae73a8342e4fee801.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 1 (contract 0.3)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The diff is complete and self-contained. I have everything I need for the review.
+
+---
+
+### Spec Compliance
+
+- ✅ [contract.py:32] `CONTRACT_VERSION = "0.3"` — exact string match required.
+- ✅ [contract.py:54] `GENERATED_FASTA = "generated_fasta"` — exact enum value match required.
+- ✅ [manifest.example.json:2] `"contract_version": "0.3"` — updated correctly.
+- ✅ [result.embed.example.json:2] `"contract_version": "0.3"` — updated correctly.
+- ✅ [result.score.example.json:2] `"contract_version": "0.3"` — updated correctly.
+- ✅ [result.generate.example.json] New fixture created. Structure matches brief exactly: `contract_version`, `capability`, `model_name`, `n_input_records`, `n_output_records`, `artifacts`, `warnings`, `params` all present with specified values.
+- ✅ [test_contract.py:153-156] Version test updated: asserts `"0.3"` and `(0, 3)`.
+- ✅ [test_contract.py:178-182] New `test_documented_generate_result_example_validates` added; asserts `capability is Capability.GENERATE` and `artifacts[0].kind == "generated_fasta"`.
+- ✅ Scope clean: no `generate` capability logic, no inference code, no ProGen2 scaffolding leaked in.
+- ✅ `Capability.GENERATE` was already present in the pre-existing enum (with a `# reserved for a future contract minor version` comment); this is correct — adding the capability stub without implementing it is consistent with scope constraints. No concern here.
+- ⚠️ The `SCORE` capability comment in the enum says `# implemented in contract 0.2`. The `GENERATE` comment says `# reserved for a future contract minor version`. Now that 0.3 is the current version and `generated_fasta` has been added, this comment is slightly stale — but this is a cross-task concern (the comment will become fully accurate when Task N implements generate), so flagging only as cross-task.
+
+---
+
+### Strengths
+
+- The diff is tightly scoped: exactly the 6 files specified in the brief, no more.
+- Fixture JSON in `result.generate.example.json` is byte-for-byte identical to the brief's specification, including the inline artifact object style and the `params` keys/values.
+- The `Capability.GENERATE` comment in contract.py was not carelessly removed; it remains accurate as a declaration without implementation.
+- Existing test assertions for embed and score examples (`test_documented_result_example_validates`, `test_documented_score_result_example_validates`) are untouched — good hygiene.
+- The two-line version test replacement is clean and complete.
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+
+None.
+
+#### Important (Should Fix)
+
+- [test_contract.py:182] The assertion `result.artifacts[0].kind == "generated_fasta"` compares a `str` against a `str`. The parallel assertions in the existing tests (`test_documented_result_example_validates` and `test_documented_score_result_example_validates`) compare against string literals too, so this is stylistically consistent. However, the assert could strengthen correctness by comparing against `ArtifactKind.GENERATED_FASTA` (which, as a `StrEnum`, compares equal to its string value) — this would bind the test to the enum and fail immediately if the enum value ever drifts, rather than passing because both sides are still the raw string. Not a blocking issue since `StrEnum.__eq__` makes both forms functionally equivalent, but the enum form is more intention-revealing and matches the `capability is Capability.GENERATE` style used one line above.
+
+#### Minor (Nice to Have)
+
+- [contract.py:41] The `GENERATE` capability comment `# reserved for a future contract minor version` is now slightly inaccurate — `generated_fasta` is here in 0.3. The comment was authored before this task and is not strictly this task's responsibility, but since the task touches this file it would be a clean-up opportunity to update it to something like `# added in contract 0.3`.
+- [result.generate.example.json] The brief's fixture JSON uses inline style for the artifact object (`{"path": ..., "kind": ..., "record_ids": [...]}`). The implementation matches this exactly, which is consistent with `result.score.example.json`. No issue — just noting the consistency is correct.
+
+---
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** All required spec changes are present and exact (version string, enum value, four fixtures, two test changes), scope is cleanly bounded with no out-of-scope leakage, and the one suggested improvement (comparing against the enum constant rather than a bare string) is a style preference, not a correctness gap.</result>
+<usage><subagent_tokens>22346</subagent_tokens><tool_uses>3</tool_uses><duration_ms>30845</duration_ms></usage>
+</task-notification>
