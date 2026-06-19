@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "6d12da67e59d",
+  "strategy": "manual-commit",
+  "branch": "feature/phase1-input-chunking",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "pyproject.toml",
+    "src/plms/chunking.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6d/12da67e59d/0/metadata.json",
+      "transcript": "/6d/12da67e59d/0/full.jsonl",
+      "content_hash": "/6d/12da67e59d/0/content_hash.txt",
+      "prompt": "/6d/12da67e59d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 10938,
+    "cache_creation_tokens": 417019,
+    "cache_read_tokens": 23340272,
+    "output_tokens": 217402,
+    "api_call_count": 112
+  }
+}
