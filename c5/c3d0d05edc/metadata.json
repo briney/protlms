@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "c5c3d0d05edc",
+  "strategy": "manual-commit",
+  "branch": "feature/phase1-generate-progen2",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "tests/test_cli.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/c5/c3d0d05edc/0/metadata.json",
+      "transcript": "/c5/c3d0d05edc/0/full.jsonl",
+      "content_hash": "/c5/c3d0d05edc/0/content_hash.txt",
+      "prompt": "/c5/c3d0d05edc/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 30589,
+    "cache_creation_tokens": 886590,
+    "cache_read_tokens": 92197387,
+    "output_tokens": 382925,
+    "api_call_count": 299
+  }
+}
