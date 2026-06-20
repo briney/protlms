@@ -1374,3 +1374,11 @@ None.
 The fix correctly names the failing chunk index in the exception message, preserves all structured error fields, and adds a targeted regression test with proper exception chaining.</result>
 <usage><subagent_tokens>18845</subagent_tokens><tool_uses>1</tool_uses><duration_ms>8022</duration_ms></usage>
 </task-notification>
+
+---
+
+2
+
+---
+
+ci on github failed the type check. diagnose and fix
