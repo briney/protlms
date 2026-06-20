@@ -1,0 +1,17 @@
+PR merged and branch deleted, switch back to main and lets start Phase 2 with GHCR integration
+
+---
+
+yes, proceed with approach A
+
+---
+
+Looks right, go ahead
+
+---
+
+Looks good
+
+---
+
+Yep, looks good
