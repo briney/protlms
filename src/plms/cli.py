@@ -35,6 +35,13 @@ _FastaArg = Annotated[
 _OutputOpt = Annotated[Path, typer.Option("-o", "--output", help="Output directory.")]
 _GpuOpt = Annotated[bool, typer.Option("--gpu/--no-gpu", help="Run the container with all GPUs.")]
 _BatchOpt = Annotated[int | None, typer.Option("--batch-size", help="Override the batch size.")]
+_ChunkSizeOpt = Annotated[
+    int | None,
+    typer.Option(
+        "--chunk-size",
+        help="Split the input into runs of at most N records (merged; resumable).",
+    ),
+]
 
 
 @app.callback()
@@ -74,6 +81,7 @@ def embed(
     layers: Annotated[str, typer.Option("--layers", help="Comma-separated layer indices.")] = "-1",
     gpu: _GpuOpt = False,
     batch_size: _BatchOpt = None,
+    chunk_size: _ChunkSizeOpt = None,
 ) -> None:
     """Compute embeddings for sequences in a FASTA file."""
     try:
@@ -85,6 +93,7 @@ def embed(
             output_dir=output_dir,
             use_gpu=gpu,
             batch_size=batch_size,
+            chunk_size=chunk_size,
         )
         console.print(
             f"[green]embed[/green] complete: {result.result.n_output_records} record(s) "
@@ -105,12 +114,13 @@ def likelihood(
     output_dir: _OutputOpt,
     gpu: _GpuOpt = False,
     batch_size: _BatchOpt = None,
+    chunk_size: _ChunkSizeOpt = None,
 ) -> None:
     """Compute per-sequence log-likelihoods for sequences in a FASTA file."""
     try:
         model_obj = load(model)
         result = model_obj.likelihood(
-            fasta, output_dir=output_dir, use_gpu=gpu, batch_size=batch_size
+            fasta, output_dir=output_dir, use_gpu=gpu, batch_size=batch_size, chunk_size=chunk_size
         )
         console.print(
             f"[green]likelihood[/green] complete: {result.result.n_output_records} record(s) "
@@ -173,6 +183,7 @@ def generate(
     ] = None,
     gpu: _GpuOpt = False,
     batch_size: _BatchOpt = None,
+    chunk_size: _ChunkSizeOpt = None,
 ) -> None:
     """Generate sequences with an autoregressive model."""
     try:
@@ -187,6 +198,7 @@ def generate(
             output_dir=output_dir,
             use_gpu=gpu,
             batch_size=batch_size,
+            chunk_size=chunk_size,
         )
         console.print(
             f"[green]generate[/green] complete: {result.result.n_output_records} sequence(s) "

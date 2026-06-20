@@ -375,3 +375,46 @@ def test_generate_empty_prompts_raises(tmp_path: Path) -> None:
     model = _load(capabilities=["generate"])
     with pytest.raises(InvalidRequestError):
         model.generate(empty, output_dir=tmp_path / "g")
+
+
+def test_embed_chunked_merges_all_records(tmp_path: Path) -> None:
+    model = _load()
+    fasta = tmp_path / "many.fasta"
+    fasta.write_text("".join(f">s{i}\nACDEFG\n" for i in range(5)))
+    result = model.embed(fasta, pooling="mean", output_dir=tmp_path / "out", chunk_size=2)
+    pooled = result.pooled()
+    assert set(pooled) == {f"s{i}" for i in range(5)}
+    assert result.result.n_output_records == 5
+    assert (tmp_path / "out" / "chunks" / "chunk_0000").is_dir()
+
+
+def test_embed_chunk_size_none_keeps_single_run(fasta: Path, tmp_path: Path) -> None:
+    model = _load()
+    out = tmp_path / "out"
+    model.embed(fasta, pooling="mean", output_dir=out, chunk_size=None)
+    assert not (out / "chunks").exists()
+
+
+def test_embed_single_chunk_short_circuits(fasta: Path, tmp_path: Path) -> None:
+    model = _load()  # the `fasta` fixture has 2 records
+    out = tmp_path / "out"
+    model.embed(fasta, pooling="mean", output_dir=out, chunk_size=10)
+    assert not (out / "chunks").exists()  # records <= chunk_size => single run
+
+
+def test_likelihood_chunked_merges_rows(tmp_path: Path) -> None:
+    model = _load()
+    fasta = tmp_path / "many.fasta"
+    fasta.write_text("".join(f">s{i}\nACDEFG\n" for i in range(4)))
+    result = model.likelihood(fasta, output_dir=tmp_path / "out", chunk_size=2)
+    rows = {r["record_id"] for r in result.rows()}
+    assert rows == {f"s{i}" for i in range(4)}
+
+
+def test_generate_chunked_merges_samples(tmp_path: Path) -> None:
+    model = _load(capabilities=["embed", "likelihood", "generate"])
+    prompts = tmp_path / "p.fasta"
+    prompts.write_text("".join(f">p{i}\nAC\n" for i in range(3)))
+    result = model.generate(prompts, num_samples=2, output_dir=tmp_path / "out", chunk_size=2)
+    ids = {r.id for r in result.sequences()}
+    assert ids == {f"p{i}__sample{k}" for i in range(3) for k in range(2)}

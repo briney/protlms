@@ -48,13 +48,14 @@ class FakeModel:
     def __init__(self) -> None:
         self.manifest = _manifest()
 
-    def embed(self, fasta, *, pooling, layers, output_dir, use_gpu, batch_size):  # noqa: ANN001
+    def embed(self, fasta, *, pooling, layers, output_dir, use_gpu, batch_size, chunk_size):  # noqa: ANN001
         FakeModel.last_call = {
             "method": "embed",
             "pooling": pooling,
             "layers": list(layers),
             "use_gpu": use_gpu,
             "output_dir": output_dir,
+            "chunk_size": chunk_size,
         }
         return EmbeddingResult(
             result=_result("embed", [{"path": "embeddings.npz", "kind": "pooled_embeddings"}]),
@@ -62,8 +63,8 @@ class FakeModel:
             pooling=pooling,
         )
 
-    def likelihood(self, fasta, *, output_dir, use_gpu, batch_size):  # noqa: ANN001
-        FakeModel.last_call = {"method": "likelihood", "use_gpu": use_gpu}
+    def likelihood(self, fasta, *, output_dir, use_gpu, batch_size, chunk_size):  # noqa: ANN001
+        FakeModel.last_call = {"method": "likelihood", "use_gpu": use_gpu, "chunk_size": chunk_size}
         return LikelihoodResult(
             result=_result("likelihood", [{"path": "likelihoods.csv", "kind": "likelihoods_csv"}]),
             output_dir=Path(output_dir),
@@ -89,6 +90,7 @@ class FakeModel:
         output_dir,
         use_gpu,
         batch_size,
+        chunk_size,
     ):  # noqa: ANN001
         FakeModel.last_call = {
             "method": "generate",
@@ -98,6 +100,7 @@ class FakeModel:
             "max_length": max_length,
             "seed": seed,
             "use_gpu": use_gpu,
+            "chunk_size": chunk_size,
         }
         return GenerationResult(
             result=_result("generate", [{"path": "generated.fasta", "kind": "generated_fasta"}]),
@@ -239,3 +242,40 @@ def test_generate_command_invokes_model(prompts: Path, tmp_path: Path, monkeypat
     assert FakeModel.last_call["temperature"] == 0.7
     assert FakeModel.last_call["top_p"] == 0.95
     assert FakeModel.last_call["use_gpu"] is True
+
+
+def test_embed_command_forwards_chunk_size(fasta: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    result = runner.invoke(
+        app,
+        ["embed", "esm2-8m", str(fasta), "-o", str(tmp_path / "out"), "--chunk-size", "1000"],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert FakeModel.last_call["chunk_size"] == 1000
+
+
+def test_embed_command_chunk_size_defaults_none(fasta: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    result = runner.invoke(app, ["embed", "esm2-8m", str(fasta), "-o", str(tmp_path / "out")])
+    assert result.exit_code == 0, result.stdout
+    assert FakeModel.last_call["chunk_size"] is None
+
+
+def test_likelihood_command_forwards_chunk_size(fasta: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    result = runner.invoke(
+        app,
+        ["likelihood", "esm2-8m", str(fasta), "-o", str(tmp_path / "out"), "--chunk-size", "500"],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert FakeModel.last_call["chunk_size"] == 500
+
+
+def test_generate_command_forwards_chunk_size(prompts: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    result = runner.invoke(
+        app,
+        ["generate", "progen2-small", str(prompts), "-o", str(tmp_path / "o"), "--chunk-size", "8"],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert FakeModel.last_call["chunk_size"] == 8
