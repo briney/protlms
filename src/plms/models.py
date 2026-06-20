@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from plms.chunking import run_chunked
 from plms.contract import (
     Capability,
     Manifest,
@@ -138,6 +139,7 @@ class Model:
         output_dir: Path | None = None,
         use_gpu: bool = False,
         batch_size: int | None = None,
+        chunk_size: int | None = None,
     ) -> EmbeddingResult:
         """Compute embeddings for the sequences in ``fasta``.
 
@@ -149,6 +151,8 @@ class Model:
             output_dir: Where to write outputs; a temporary directory if ``None``.
             use_gpu: Request all GPUs for the container run.
             batch_size: Override the model's default batch size.
+            chunk_size: If set, split the input into runs of at most this many records and
+                merge the outputs (resumable into a persistent output_dir).
 
         Raises:
             CapabilityNotSupportedError: If the model does not support embedding.
@@ -161,9 +165,14 @@ class Model:
         extra = ["--pooling", pooling, "--layers", ",".join(str(x) for x in layers)]
         if batch_size is not None:
             extra += ["--batch-size", str(batch_size)]
-        result, out_dir, keep = self._run(
-            Capability.EMBED, stage_inputs(records), extra, output_dir, use_gpu
-        )
+        if chunk_size is not None:
+            result, out_dir, keep = self._run_chunked(
+                Capability.EMBED, records, extra, output_dir, use_gpu, chunk_size
+            )
+        else:
+            result, out_dir, keep = self._run(
+                Capability.EMBED, stage_inputs(records), extra, output_dir, use_gpu
+            )
         return EmbeddingResult(result=result, output_dir=out_dir, pooling=pooling, _keepalive=keep)
 
     def likelihood(
@@ -173,12 +182,21 @@ class Model:
         output_dir: Path | None = None,
         use_gpu: bool = False,
         batch_size: int | None = None,
+        chunk_size: int | None = None,
     ) -> LikelihoodResult:
         """Compute per-sequence log-likelihoods.
 
         The scoring method depends on the model: masked-marginal for masked LMs,
         causal (left-to-right) for autoregressive LMs. The method used is recorded
         in ``result.json`` under ``params.likelihood_method``.
+
+        Args:
+            fasta: Path to the input FASTA file.
+            output_dir: Where to write outputs; a temporary directory if ``None``.
+            use_gpu: Request all GPUs for the container run.
+            batch_size: Override the model's default batch size.
+            chunk_size: If set, split the input into runs of at most this many records and
+                merge the outputs (resumable into a persistent output_dir).
 
         Raises:
             CapabilityNotSupportedError: If the model does not support likelihoods.
@@ -188,9 +206,14 @@ class Model:
         self._require_capability(Capability.LIKELIHOOD)
         records = self._read_records(fasta)
         extra = ["--batch-size", str(batch_size)] if batch_size is not None else []
-        result, out_dir, keep = self._run(
-            Capability.LIKELIHOOD, stage_inputs(records), extra, output_dir, use_gpu
-        )
+        if chunk_size is not None:
+            result, out_dir, keep = self._run_chunked(
+                Capability.LIKELIHOOD, records, extra, output_dir, use_gpu, chunk_size
+            )
+        else:
+            result, out_dir, keep = self._run(
+                Capability.LIKELIHOOD, stage_inputs(records), extra, output_dir, use_gpu
+            )
         return LikelihoodResult(result=result, output_dir=out_dir, _keepalive=keep)
 
     def score(
@@ -243,6 +266,7 @@ class Model:
         output_dir: Path | None = None,
         use_gpu: bool = False,
         batch_size: int | None = None,
+        chunk_size: int | None = None,
     ) -> GenerationResult:
         """Sample sequences from an autoregressive model.
 
@@ -257,6 +281,8 @@ class Model:
             output_dir: Where to write outputs; a temporary directory if ``None``.
             use_gpu: Request all GPUs for the container run.
             batch_size: Override the model's default batch size.
+            chunk_size: If set, split the input into runs of at most this many records and
+                merge the outputs (resumable into a persistent output_dir).
 
         Raises:
             CapabilityNotSupportedError: If the model does not support generation.
@@ -279,9 +305,14 @@ class Model:
             extra += ["--seed", str(seed)]
         if batch_size is not None:
             extra += ["--batch-size", str(batch_size)]
-        result, out_dir, keep = self._run(
-            Capability.GENERATE, stage_inputs(records), extra, output_dir, use_gpu
-        )
+        if chunk_size is not None:
+            result, out_dir, keep = self._run_chunked(
+                Capability.GENERATE, records, extra, output_dir, use_gpu, chunk_size
+            )
+        else:
+            result, out_dir, keep = self._run(
+                Capability.GENERATE, stage_inputs(records), extra, output_dir, use_gpu
+            )
         return GenerationResult(result=result, output_dir=out_dir, _keepalive=keep)
 
     # --- internals ---------------------------------------------------------
@@ -315,15 +346,16 @@ class Model:
             )
         return records
 
-    def _run(
+    def _run_into_dir(
         self,
         capability: Capability,
         staging,  # contextmanager[StagedInput]
         extra_args: list[str],
-        output_dir: Path | None,
+        out_dir: Path,
         use_gpu: bool,
-    ) -> tuple[Result, Path, tempfile.TemporaryDirectory | None]:
-        out_dir, keep = self._resolve_output_dir(output_dir)
+    ) -> Result:
+        """Run one container job into ``out_dir`` and return its parsed Result."""
+        out_dir.mkdir(parents=True, exist_ok=True)
         with staging as staged:
             command = [
                 capability.value,
@@ -343,7 +375,44 @@ class Model:
             run_result = self._runner.run(spec)
         if run_result.exit_code != 0:
             self._raise_container_error(run_result)
-        return read_result(out_dir), out_dir, keep
+        return read_result(out_dir)
+
+    def _run(
+        self,
+        capability: Capability,
+        staging,  # contextmanager[StagedInput]
+        extra_args: list[str],
+        output_dir: Path | None,
+        use_gpu: bool,
+    ) -> tuple[Result, Path, tempfile.TemporaryDirectory | None]:
+        out_dir, keep = self._resolve_output_dir(output_dir)
+        result = self._run_into_dir(capability, staging, extra_args, out_dir, use_gpu)
+        return result, out_dir, keep
+
+    def _run_chunked(
+        self,
+        capability: Capability,
+        records: list[FastaRecord],
+        extra_args: list[str],
+        output_dir: Path | None,
+        use_gpu: bool,
+        chunk_size: int,
+    ) -> tuple[Result, Path, tempfile.TemporaryDirectory | None]:
+        out_dir, keep = self._resolve_output_dir(output_dir)
+
+        def run_chunk(chunk: list[FastaRecord], chunk_dir: Path) -> Result:
+            return self._run_into_dir(
+                capability, stage_inputs(chunk), extra_args, chunk_dir, use_gpu
+            )
+
+        result = run_chunked(
+            capability=capability.value,
+            records=records,
+            chunk_size=chunk_size,
+            output_dir=out_dir,
+            run_chunk=run_chunk,
+        )
+        return result, out_dir, keep
 
     @staticmethod
     def _resolve_output_dir(
