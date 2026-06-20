@@ -69,7 +69,7 @@ def test_resolve_esm_c() -> None:
     assert registry.resolve("esmc_600m") == e600
 
 
-def _entry(**overrides) -> ModelEntry:
+def _entry(**overrides: object) -> ModelEntry:
     data = dict(name="m", image="ghcr.io/briney/plms-esm2:t6_8M", model_family="esm2")
     data.update(overrides)
     return ModelEntry(**data)
