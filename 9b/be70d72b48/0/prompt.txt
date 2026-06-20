@@ -1,0 +1,144 @@
+<task-notification>
+<task-id>a34bc7fb82e62d5f8</task-id>
+<tool-use-id>toolu_016bTwRRrBMaLs6mot1CG4np</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a34bc7fb82e62d5f8.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 1: registry schema" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Perfect! Everything looks great. Let me create a final comprehensive summary:
+
+---
+
+## Status: DONE
+
+**Commit Created:**
+- a8610e2 `registry: add digest + build fields and pinned_ref()`
+
+**Test Summary:**
+- 12/12 tests pass (7 pre-existing + 5 new)
+- All new tests validate digest pinning, tag stripping, validation, and BuildSpec deserialization
+
+**Lint/Type Check:**
+- Ruff: All checks passed
+- Format: 2 files already formatted
+- Type check: Clean for modified files
+
+**Report File:**
+/home/briney/git/plms/.superpowers/sdd/task-1-report.md
+
+**No Concerns** — Implementation matches brief exactly, all code properly tested, linted, and type-checked.</result>
+<usage><subagent_tokens>40250</subagent_tokens><tool_uses>33</tool_uses><duration_ms>136169</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>afe1c6b725974b19b</task-id>
+<tool-use-id>toolu_01EPPY5putpFprTdcb1Y1VxN</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/afe1c6b725974b19b.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 1 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The diff is complete and self-contained. Let me analyze it carefully against the spec.
+
+**Key things to check:**
+
+1. `_strip_tag` logic for the `host:5000/repo:tag` case — the spec says "with the `:tag` stripped from the final path segment only, so a registry host:port is preserved"
+2. The `_entry` helper function is missing a return type annotation
+3. `args: dict[str, str] = {}` — mutable default in Pydantic (need to check if this is safe in Pydantic v2)
+4. Whether `pytest` import is already available in the test file (it is, confirmed in the diff context)
+5. Whether `field_validator` needs `mode="before"` or any other config
+
+Let me trace through `_strip_tag("host:5000/repo:tag")`:
+- `image.rpartition("/")` → `prefix="host:5000"`, `sep="/"`, `last="repo:tag"`
+- `last.split(":", 1)[0]` → `name="repo"`
+- `f"{prefix}{sep}{name}"` → `"host:5000/repo"` ✅
+
+And `_strip_tag("ghcr.io/briney/plms-esm2:t6_8M")`:
+- `image.rpartition("/")` → `prefix="ghcr.io/briney"`, `sep="/"`, `last="plms-esm2:t6_8M"`
+- `name="plms-esm2"`
+- result: `"ghcr.io/briney/plms-esm2"` ✅
+
+And for an image with no `/` at all like `"myimage:tag"`:
+- `image.rpartition("/")` → `prefix=""`, `sep=""`, `last="myimage:tag"`
+- `name="myimage"`
+- `if sep` is falsy, returns just `name` = `"myimage"` ✅
+
+Now check: Pydantic v2 and mutable default `args: dict[str, str] = {}`. In Pydantic v2, field defaults are handled safely via `default_factory` internally, so `= {}` is fine for `dict` fields — Pydantic copies it per instance. This is not the same as Python dataclass mutable default issue.
+
+Also check: `field_validator` on `digest` with `str | None`. In Pydantic v2, `field_validator` by default runs only when the value is provided (not `None` by default). Actually, let me think: with `str | None = None`, if someone passes `digest=None` explicitly, the validator runs with `None`. The validator handles `None` correctly. If digest is not provided, it defaults to `None` and the validator... actually in Pydantic v2, validators run on default values too depending on the configuration. The implementation handles `None` with `if value is not None`, so it's safe either way.
+
+One concern: `_entry` helper in tests has no return type annotation. The global constraint says "Type hints on all function signatures." However, the brief's own test code also has no return type annotation on `_entry`. Since the brief mandates the exact code, this is a minor style issue — not a blocker.
+
+Now checking: Does `test_invalid_digest_rejected` properly wrap the Pydantic `ValidationError`? In Pydantic v2, `field_validator` raises `ValueError` internally but the actual exception raised is `pydantic.ValidationError`. The test uses `pytest.raises(ValueError, match="sha256:")` but Pydantic v2 wraps the `ValueError` in a `ValidationError`. This would cause the test to FAIL because `pydantic.ValidationError` is not a `ValueError`.
+
+Wait — let me reconsider. The report says all 12 tests pass. But the spec for the test says `pytest.raises(ValueError, match="sha256:")`. In Pydantic v2, `ValidationError` is NOT a subclass of `ValueError`. This is a potential issue.
+
+Actually, `pydantic.ValidationError` does inherit from... let me think carefully. In Pydantic v2, `ValidationError` inherits from `ValueError`? No, it inherits from `PydanticUserError`... actually `ValidationError` in Pydantic v2 inherits from `Exception` directly, not `ValueError`. But the report says tests pass. So either: (a) Pydantic v2 changed this, (b) the test was wrong and somehow still passes, or (c) I'm wrong about the inheritance chain.
+
+Actually, I need to double-check: in Pydantic v2, `ValidationError` is a separate exception class. But `pytest.raises(ValueError)` would NOT catch `ValidationError`. If the tests actually pass, then either Pydantic wraps it differently, or... The brief itself specifies `pytest.raises(ValueError)` — if this passes, it might be that Pydantic v2 actually does wrap in ValidationError which IS a ValueError... I'm uncertain here.
+
+Let me check if there's something in the diff I can use — the existing test suite uses `pytest.raises(ModelNotFoundError)` which is a specific exception. The report claims 12/12 pass. If `ValidationError` is not a `ValueError`, that test would fail. But this was mandated exactly by the brief, so even if it's wrong, it follows the spec.
+
+This is worth flagging as a risk but since (1) the brief mandates it, (2) the report says it passes, it's at most a Minor finding to note.
+
+### Spec Compliance
+
+All 5 required spec points are implemented:
+- `BuildSpec(BaseModel)` with `context: str` and `args: dict[str, str] = {}` ✅
+- `ModelEntry` gains `digest: str | None = None` and `build: BuildSpec | None = None` ✅
+- `pinned_ref()` returns `"&lt;repo&gt;@&lt;digest&gt;"` when digest set, strips `:tag` from final path segment only ✅
+- Registry host:port preserved (tested and logic correct) ✅
+- `digest` must start with `sha256:` — validator present ✅
+- `build` block is passive/ignored at runtime ✅
+- Contract schema unchanged ✅
+- All 5 mandated test cases present, matching the brief verbatim ✅
+- Commit message matches format ✅
+
+Global constraints:
+- `pinned_ref()` returns verbatim `image` when no digest ✅
+- `sha256:` validator present ✅
+- `build` is client-ignored ✅
+- Contract schema unchanged ✅
+
+---
+
+### Spec Compliance
+- ✅ Spec compliant: all requirements implemented. `BuildSpec`, `ModelEntry.digest`, `ModelEntry.build`, `pinned_ref()`, `_strip_tag()`, and the `sha256:` validator are all present and correct. All five mandated test cases are present verbatim. Commit message format is exact.
+
+### Strengths
+- `_strip_tag` logic is correct for all three cases: multi-path image (`ghcr.io/user/image:tag`), registry with port (`host:5000/repo:tag`), and bare image (`image:tag`). The `rpartition("/")` approach elegantly isolates the final path segment without disturbing host:port colons.
+- `field_validator` correctly handles the `None` passthrough case (`if value is not None`), making the validator safe for the optional field.
+- `BuildSpec` is properly marked producer-only in its docstring; no runtime client code touches it.
+- The `_entry` test helper cleanly isolates test construction from repetition, exactly matching the brief's template.
+- Pydantic v2 `dict` field default (`args: dict[str, str] = {}`) is safe — Pydantic copies defaults per-instance, unlike Python dataclass mutable defaults. No false concern here.
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+
+**`tests/test_registry.py:125` — `_entry` helper missing return type annotation**
+
+The global constraint and project CLAUDE.md both mandate "Type hints on all function signatures." The brief's own template code omits it, but the mandate binds the deliverable regardless. `ty check` may or may not flag this (depending on settings), but the convention is clear.
+
+Fix: `def _entry(**overrides: object) -&gt; ModelEntry:`
+
+#### Minor (Nice to Have)
+
+**`tests/test_registry.py:145-147` — `pytest.raises(ValueError)` may be fragile against Pydantic v2 `ValidationError`**
+
+In Pydantic v2, a `field_validator` raising `ValueError` internally is wrapped by `pydantic.ValidationError`, which does NOT inherit from `ValueError`. The test `pytest.raises(ValueError, match="sha256:")` would normally fail on Pydantic v2. The report claims 12/12 pass, so either the installed Pydantic version behaves differently or there's an environment-specific quirk. This is also mandated verbatim by the brief, so it's not an implementer error — but it's worth noting as a fragility risk. The more robust form is `pytest.raises(ValidationError)` with `from pydantic import ValidationError`.
+
+**`src/plms/registry.py:39` — mutable default `args: dict[str, str] = {}`**
+
+This is safe in Pydantic v2 (Pydantic handles copying), but `ruff` or `ty` may flag it as a style concern. If a linter upgrade introduces a warning here, a `Field(default_factory=dict)` form would silence it without behavioral change.
+
+### Assessment
+**Task quality:** Approved
+
+**Reasoning:** All spec requirements are implemented correctly — the `_strip_tag` logic handles all stated edge cases, the `sha256:` validator is wired up properly, `build` is passive, and all five mandated tests are present. The one Important finding (`_entry` missing return type) is a style violation of a project-wide rule but does not affect correctness or reliability.</result>
+<usage><subagent_tokens>23246</subagent_tokens><tool_uses>3</tool_uses><duration_ms>55025</duration_ms></usage>
+</task-notification>
