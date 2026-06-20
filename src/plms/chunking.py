@@ -108,7 +108,10 @@ def _merge_pooled(pairs: list[tuple[Path, Result]], output_dir: Path) -> list[Ou
     merged: dict[str, np.ndarray] = {}
     for chunk_dir, result in pairs:
         merged.update(load_pooled_embeddings(chunk_dir, result))
-    np.savez(output_dir / "embeddings.npz", **merged)
+    # `np.savez(file, **arrays)` is the documented way to write id-keyed arrays;
+    # ty flags the dict unpack against savez's `allow_pickle: bool` keyword, which
+    # cannot collide here (our keys are record ids). Idiomatic and correct.
+    np.savez(output_dir / "embeddings.npz", **merged)  # ty: ignore[invalid-argument-type]
     sample = next(iter(merged.values()))
     return [
         OutputArtifact(
