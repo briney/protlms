@@ -280,3 +280,23 @@ def test_run_chunked_rejects_duplicate_ids(tmp_path: Path) -> None:
             output_dir=out,
             run_chunk=_CountingRunChunk(),
         )
+
+
+def test_run_chunked_failed_chunk_names_index(tmp_path: Path) -> None:
+    from plms.exceptions import ContainerExecutionError
+
+    out = tmp_path / "out"
+    out.mkdir()
+
+    def failing(chunk, cdir):  # noqa: ANN001
+        raise ContainerExecutionError("boom", error_type="InternalError", exit_code=1)
+
+    with pytest.raises(ContainerExecutionError) as excinfo:
+        run_chunked(
+            capability="embed",
+            records=[_rec(i) for i in range(4)],
+            chunk_size=2,
+            output_dir=out,
+            run_chunk=failing,
+        )
+    assert "chunk 0" in str(excinfo.value)

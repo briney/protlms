@@ -20,7 +20,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from plms.contract import ArtifactKind, OutputArtifact, Result
-from plms.exceptions import FastaError, InvalidRequestError, OutputParseError
+from plms.exceptions import (
+    ContainerExecutionError,
+    FastaError,
+    InvalidRequestError,
+    OutputParseError,
+)
 from plms.io import load_pooled_embeddings, read_fasta, read_result
 
 if TYPE_CHECKING:
@@ -211,7 +216,17 @@ def run_chunked(
             pairs.append((chunk_dir, done))
             continue
         logger.info("running chunk %d/%d (%d records)", index + 1, len(chunks), len(chunk))
-        pairs.append((chunk_dir, run_chunk(chunk, chunk_dir)))
+        try:
+            result = run_chunk(chunk, chunk_dir)
+        except ContainerExecutionError as exc:
+            raise ContainerExecutionError(
+                f"chunk {index} ({chunk_dir.name}) failed: {exc}",
+                error_type=exc.error_type,
+                details={**exc.details, "chunk_index": str(index), "chunk_dir": chunk_dir.name},
+                exit_code=exc.exit_code,
+                stderr_tail=exc.stderr_tail,
+            ) from exc
+        pairs.append((chunk_dir, result))
     return merge_chunk_outputs(capability, pairs, output_dir)
 
 
