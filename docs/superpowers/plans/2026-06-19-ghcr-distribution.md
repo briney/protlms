@@ -608,7 +608,7 @@ git commit -m "models: auto-pull pinned image on load with PLMS_NO_PULL escape h
 - Consumes: `ensure_image` (Task 3), `SubprocessDockerRunner` (existing), `Registry` (existing), `load(allow_pull=...)` (Task 4).
 - Produces:
   - `plms pull <model>` and `plms pull --all`.
-  - `--no-pull` option on `embed`, `likelihood`, `score`, `generate`, threading `allow_pull=False` into `load()` (the four commands that call `load`; spec named embed/likelihood/generate — score included for consistency).
+  - `--no-pull` option on `embed`, `likelihood`, `generate`, threading `allow_pull=False` into `load()` (matches the spec; `score` is left untouched, consistent with how Phase 1 handled `--chunk-size`).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -714,13 +714,13 @@ def pull(
         _fail(exc)
 ```
 
-Add `no_pull: _NoPullOpt = False,` to the signatures of `embed`, `likelihood`, `score`, and `generate` (as the last parameter), and change each `model_obj = load(model)` call to:
+Add `no_pull: _NoPullOpt = False,` to the signatures of `embed`, `likelihood`, and `generate` (as the last parameter), and change each of those three `model_obj = load(model)` calls to:
 
 ```python
         model_obj = load(model, allow_pull=False if no_pull else None)
 ```
 
-(There are four such call sites — one per command.)
+(Three call sites — one per command. Leave `score`'s signature and its `load(model)` call unchanged.)
 
 - [ ] **Step 4: Run tests to verify they pass**
 
