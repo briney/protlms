@@ -9,6 +9,7 @@ the outputs into Python objects.
 from __future__ import annotations
 
 import logging
+import os
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,7 +41,7 @@ from plms.io import (
     stage_inputs,
 )
 from plms.registry import ModelEntry, Registry
-from plms.runner import Runner, RunSpec, SubprocessDockerRunner
+from plms.runner import Runner, RunSpec, SubprocessDockerRunner, ensure_image
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -115,10 +116,13 @@ class GenerationResult:
 class Model:
     """A loaded model exposing the unified inference capabilities."""
 
-    def __init__(self, entry: ModelEntry, runner: Runner, manifest: Manifest) -> None:
+    def __init__(
+        self, entry: ModelEntry, runner: Runner, manifest: Manifest, image_ref: str
+    ) -> None:
         self._entry = entry
         self._runner = runner
         self._manifest = manifest
+        self._image_ref = image_ref
 
     @property
     def manifest(self) -> Manifest:
@@ -366,7 +370,7 @@ class Model:
                 *extra_args,
             ]
             spec = RunSpec(
-                image=self._entry.image,
+                image=self._image_ref,
                 command=command,
                 input_dir=staged.input_dir,
                 output_dir=out_dir,
@@ -444,30 +448,45 @@ class Model:
         )
 
 
+def _resolve_allow_pull(allow_pull: bool | None) -> bool:
+    """Resolve pull policy: explicit arg wins, else consult ``PLMS_NO_PULL``."""
+    if allow_pull is not None:
+        return allow_pull
+    no_pull = os.environ.get("PLMS_NO_PULL", "").strip().lower() in {"1", "true", "yes"}
+    return not no_pull
+
+
 def load(
     name: str,
     *,
     runner: Runner | None = None,
     registry: Registry | None = None,
+    allow_pull: bool | None = None,
 ) -> Model:
     """Resolve a model name and return a ready-to-use :class:`Model`.
 
-    Resolves the name against the registry, reads the image's manifest, checks
+    Resolves the name against the registry, ensures the pinned image is present
+    locally (pulling it when permitted), reads the image's manifest, checks
     contract compatibility, and constructs the model.
 
     Args:
         name: A model name or alias known to the registry.
         runner: The container runner (defaults to a local docker subprocess runner).
         registry: The model registry (defaults to the packaged registry).
+        allow_pull: Whether to pull a missing image. ``None`` (default) consults
+            the ``PLMS_NO_PULL`` environment variable.
 
     Raises:
         ModelNotFoundError: If the name is unknown.
-        ImageNotFoundError: If the image is not available locally.
+        ImageNotFoundError: If the image is absent and pulling is disabled.
+        ImagePullError: If the image must be pulled and the pull fails.
         ContractVersionError: If the image's contract major version mismatches.
     """
     runner = runner or SubprocessDockerRunner()
     registry = registry or Registry.load()
     entry = registry.resolve(name)
-    manifest = Manifest.model_validate_json(runner.manifest(entry.image))
+    ref = entry.pinned_ref()
+    ensure_image(runner, ref, allow_pull=_resolve_allow_pull(allow_pull), model_name=name)
+    manifest = Manifest.model_validate_json(runner.manifest(ref))
     check_contract_compatibility(manifest.contract_version)
-    return Model(entry, runner, manifest)
+    return Model(entry, runner, manifest, image_ref=ref)
