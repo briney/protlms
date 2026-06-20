@@ -13,7 +13,7 @@ from plms.registry import BuildSpec, ModelEntry, Registry
 def test_default_registry_resolves_esm2_8m() -> None:
     registry = Registry.load()
     entry = registry.resolve("esm2-8m")
-    assert entry.image == "plms-esm2:t6_8M"
+    assert entry.image == "ghcr.io/briney/plms-esm2:t6_8M"
     assert entry.model_family == "esm2"
 
 
@@ -52,7 +52,7 @@ def test_load_from_custom_path(tmp_path: Path) -> None:
 def test_resolve_progen2_small() -> None:
     registry = Registry.load()
     entry = registry.resolve("progen2-small")
-    assert entry.image == "plms-progen2:small"
+    assert entry.image == "ghcr.io/briney/plms-progen2:small"
     assert entry.model_family == "progen2"
     assert registry.resolve("progen2_small") == entry
 
@@ -60,11 +60,11 @@ def test_resolve_progen2_small() -> None:
 def test_resolve_esm_c() -> None:
     registry = Registry.load()
     e300 = registry.resolve("esm-c-300m")
-    assert e300.image == "plms-esm-c:300m"
+    assert e300.image == "ghcr.io/briney/plms-esm-c:300m"
     assert e300.model_family == "esm-c"
     assert registry.resolve("esmc_300m") == e300
     e600 = registry.resolve("esm-c-600m")
-    assert e600.image == "plms-esm-c:600m"
+    assert e600.image == "ghcr.io/briney/plms-esm-c:600m"
     assert e600.model_family == "esm-c"
     assert registry.resolve("esmc_600m") == e600
 

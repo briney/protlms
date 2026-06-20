@@ -19,7 +19,7 @@ import pytest
 
 import plms
 
-IMAGE = "plms-esm2:t6_8M"
+IMAGE = "ghcr.io/briney/plms-esm2:t6_8M"
 EMBEDDING_DIM = 320
 REPO_ROOT = Path(__file__).parents[1]
 TINY_FASTA = REPO_ROOT / "tests" / "data" / "tiny.fasta"
@@ -66,7 +66,7 @@ def esm2_image() -> str:
 
 @pytest.fixture(scope="session")
 def model(esm2_image: str) -> plms.Model:
-    return plms.load("esm2-8m")
+    return plms.load("esm2-8m", allow_pull=False)
 
 
 def test_manifest_is_read_through_client(model: plms.Model) -> None:
