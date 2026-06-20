@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from plms.exceptions import ImageNotFoundError, ImagePullError, RunnerError
-from plms.runner import RunSpec, SubprocessDockerRunner, build_argv
+from plms.runner import RunSpec, SubprocessDockerRunner, build_argv, ensure_image
 
 
 def _spec(tmp_path: Path, **overrides) -> RunSpec:
@@ -194,3 +194,44 @@ def test_pull_auth_error_adds_login_hint(monkeypatch) -> None:
     monkeypatch.setattr(subprocess, "run", fake_run)
     with pytest.raises(ImagePullError, match="docker login ghcr.io"):
         SubprocessDockerRunner().pull("img@sha256:abc")
+
+
+class _RecordingRunner:
+    """A minimal Runner stand-in that records pulls."""
+
+    def __init__(self, *, present: bool, pull_error: Exception | None = None) -> None:
+        self._present = present
+        self._pull_error = pull_error
+        self.pulled: list[str] = []
+
+    def image_present(self, ref: str) -> bool:
+        return self._present
+
+    def pull(self, ref: str) -> None:
+        self.pulled.append(ref)
+        if self._pull_error is not None:
+            raise self._pull_error
+
+
+def test_ensure_image_noop_when_present() -> None:
+    runner = _RecordingRunner(present=True)
+    ensure_image(runner, "img@sha256:abc", allow_pull=True, model_name="m")
+    assert runner.pulled == []
+
+
+def test_ensure_image_pulls_when_absent_and_allowed() -> None:
+    runner = _RecordingRunner(present=False)
+    ensure_image(runner, "img@sha256:abc", allow_pull=True, model_name="m")
+    assert runner.pulled == ["img@sha256:abc"]
+
+
+def test_ensure_image_raises_when_absent_and_pull_disabled() -> None:
+    runner = _RecordingRunner(present=False)
+    with pytest.raises(ImageNotFoundError, match="plms pull m"):
+        ensure_image(runner, "img@sha256:abc", allow_pull=False, model_name="m")
+
+
+def test_ensure_image_propagates_pull_error() -> None:
+    runner = _RecordingRunner(present=False, pull_error=ImagePullError("boom"))
+    with pytest.raises(ImagePullError, match="boom"):
+        ensure_image(runner, "img@sha256:abc", allow_pull=True, model_name="m")

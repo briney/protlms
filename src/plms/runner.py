@@ -65,6 +65,30 @@ class Runner(Protocol):
     def pull(self, ref: str) -> None: ...
 
 
+def ensure_image(runner: Runner, ref: str, *, allow_pull: bool, model_name: str) -> None:
+    """Ensure an image is present locally, pulling it when permitted.
+
+    Args:
+        runner: The container runner.
+        ref: The image reference to ensure (typically a digest-pinned ref).
+        allow_pull: Whether to pull when the image is absent.
+        model_name: The model name, used only for error messages.
+
+    Raises:
+        ImageNotFoundError: If the image is absent and ``allow_pull`` is False.
+        ImagePullError: If a pull is attempted and fails.
+    """
+    if runner.image_present(ref):
+        return
+    if not allow_pull:
+        raise ImageNotFoundError(
+            f"image {ref!r} for model {model_name!r} is not available locally and "
+            f"pulling is disabled. Run `plms pull {model_name}` or unset PLMS_NO_PULL."
+        )
+    logger.info("pulling image %s for model %s", ref, model_name)
+    runner.pull(ref)
+
+
 def _current_user() -> str | None:
     """Return ``uid:gid`` for the current process, or ``None`` on non-POSIX hosts."""
     if hasattr(os, "getuid"):
