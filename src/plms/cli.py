@@ -11,6 +11,7 @@ from plms import __version__
 from plms.exceptions import InvalidRequestError, PlmsError
 from plms.models import load
 from plms.registry import Registry
+from plms.runner import SubprocessDockerRunner, ensure_image
 
 app = typer.Typer(
     name="plms",
@@ -42,6 +43,10 @@ _ChunkSizeOpt = Annotated[
         help="Split the input into runs of at most N records (merged; resumable).",
     ),
 ]
+_NoPullOpt = Annotated[
+    bool,
+    typer.Option("--no-pull", help="Do not pull the image if it is missing locally."),
+]
 
 
 @app.callback()
@@ -71,6 +76,30 @@ def models_list() -> None:
 
 
 @app.command()
+def pull(
+    model: Annotated[str | None, typer.Argument(help="Model name or alias.")] = None,
+    all_models: Annotated[bool, typer.Option("--all", help="Pull every registered model.")] = False,
+) -> None:
+    """Pull a model's container image from its registry (digest-pinned when set)."""
+    registry = Registry.load()
+    try:
+        if all_models:
+            entries = registry.list_models()
+        elif model is not None:
+            entries = [registry.resolve(model)]
+        else:
+            raise InvalidRequestError("provide a model name or --all")
+        docker_runner = SubprocessDockerRunner()
+        for entry in entries:
+            ref = entry.pinned_ref()
+            console.print(f"pulling [bold]{entry.name}[/bold] ({ref}) …")
+            ensure_image(docker_runner, ref, allow_pull=True, model_name=entry.name)
+            console.print(f"  [green]ok[/green] {entry.name}")
+    except PlmsError as exc:
+        _fail(exc)
+
+
+@app.command()
 def embed(
     model: _ModelArg,
     fasta: _FastaArg,
@@ -82,10 +111,11 @@ def embed(
     gpu: _GpuOpt = False,
     batch_size: _BatchOpt = None,
     chunk_size: _ChunkSizeOpt = None,
+    no_pull: _NoPullOpt = False,
 ) -> None:
     """Compute embeddings for sequences in a FASTA file."""
     try:
-        model_obj = load(model)
+        model_obj = load(model, allow_pull=False if no_pull else None)
         result = model_obj.embed(
             fasta,
             pooling=pooling,
@@ -115,10 +145,11 @@ def likelihood(
     gpu: _GpuOpt = False,
     batch_size: _BatchOpt = None,
     chunk_size: _ChunkSizeOpt = None,
+    no_pull: _NoPullOpt = False,
 ) -> None:
     """Compute per-sequence log-likelihoods for sequences in a FASTA file."""
     try:
-        model_obj = load(model)
+        model_obj = load(model, allow_pull=False if no_pull else None)
         result = model_obj.likelihood(
             fasta, output_dir=output_dir, use_gpu=gpu, batch_size=batch_size, chunk_size=chunk_size
         )
@@ -184,10 +215,11 @@ def generate(
     gpu: _GpuOpt = False,
     batch_size: _BatchOpt = None,
     chunk_size: _ChunkSizeOpt = None,
+    no_pull: _NoPullOpt = False,
 ) -> None:
     """Generate sequences with an autoregressive model."""
     try:
-        model_obj = load(model)
+        model_obj = load(model, allow_pull=False if no_pull else None)
         result = model_obj.generate(
             prompts,
             num_samples=num_samples,

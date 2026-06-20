@@ -11,6 +11,7 @@ from plms.cli import app
 from plms.contract import Manifest, Result
 from plms.exceptions import ModelNotFoundError
 from plms.models import EmbeddingResult, GenerationResult, LikelihoodResult, ScoreResult
+from plms.registry import Registry
 
 runner = CliRunner()
 
@@ -279,3 +280,47 @@ def test_generate_command_forwards_chunk_size(prompts: Path, tmp_path: Path, mon
     )
     assert result.exit_code == 0, result.stdout
     assert FakeModel.last_call["chunk_size"] == 8
+
+
+def test_pull_command_pulls_resolved_model(monkeypatch) -> None:
+    calls: list[tuple[str, bool, str]] = []
+    monkeypatch.setattr("plms.cli.SubprocessDockerRunner", lambda: object())
+    monkeypatch.setattr(
+        "plms.cli.ensure_image",
+        lambda runner, ref, *, allow_pull, model_name: calls.append((ref, allow_pull, model_name)),
+    )
+    result = runner.invoke(app, ["pull", "esm2-8m"])
+    assert result.exit_code == 0, result.output
+    assert calls and calls[0][1] is True and calls[0][2] == "esm2-8m"
+
+
+def test_pull_all_pulls_every_model(monkeypatch) -> None:
+    pulled: list[str] = []
+    monkeypatch.setattr("plms.cli.SubprocessDockerRunner", lambda: object())
+    monkeypatch.setattr(
+        "plms.cli.ensure_image",
+        lambda runner, ref, *, allow_pull, model_name: pulled.append(model_name),
+    )
+    result = runner.invoke(app, ["pull", "--all"])
+    assert result.exit_code == 0, result.output
+    assert len(pulled) == len(Registry.load().list_models())
+
+
+def test_pull_without_model_or_all_errors() -> None:
+    result = runner.invoke(app, ["pull"])
+    assert result.exit_code == 1
+
+
+def test_embed_no_pull_threads_allow_pull_false(fasta: Path, tmp_path: Path, monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_load(name, **kw):  # noqa: ANN001, ANN003
+        captured.update(kw)
+        return FakeModel()
+
+    monkeypatch.setattr("plms.cli.load", fake_load)
+    result = runner.invoke(
+        app, ["embed", "esm2-8m", str(fasta), "-o", str(tmp_path / "out"), "--no-pull"]
+    )
+    assert result.exit_code == 0, result.output
+    assert captured.get("allow_pull") is False
