@@ -14,7 +14,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
-from plms.exceptions import ImageNotFoundError, RunnerError
+from plms.exceptions import ImageNotFoundError, ImagePullError, RunnerError
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -59,6 +59,10 @@ class Runner(Protocol):
     def run(self, spec: RunSpec) -> RunResult: ...
 
     def manifest(self, image: str) -> str: ...
+
+    def image_present(self, ref: str) -> bool: ...
+
+    def pull(self, ref: str) -> None: ...
 
 
 def _current_user() -> str | None:
@@ -136,6 +140,29 @@ class SubprocessDockerRunner:
                 f"{completed.stderr.strip()[:500]}"
             )
         return completed.stdout
+
+    def image_present(self, ref: str) -> bool:
+        """Return True if the image is available in the local Docker store."""
+        completed = self._invoke([self._docker, "image", "inspect", ref])
+        return completed.returncode == 0
+
+    def pull(self, ref: str) -> None:
+        """Pull an image from its registry.
+
+        Raises:
+            RunnerError: If the docker executable cannot be invoked.
+            ImagePullError: If ``docker pull`` exits non-zero.
+        """
+        completed = self._invoke([self._docker, "pull", ref])
+        if completed.returncode != 0:
+            stderr = completed.stderr.strip()
+            hint = ""
+            if any(t in stderr.lower() for t in ("denied", "unauthorized", "authentication")):
+                hint = " (authentication failed; try `docker login ghcr.io`)"
+            raise ImagePullError(
+                f"failed to pull image {ref!r} (exit {completed.returncode}){hint}. "
+                f"stderr: {stderr[:500]}"
+            )
 
     def _invoke(self, argv: list[str]) -> subprocess.CompletedProcess[str]:
         logger.info("running: %s", " ".join(argv))

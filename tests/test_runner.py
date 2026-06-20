@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from plms.exceptions import ImageNotFoundError, RunnerError
+from plms.exceptions import ImageNotFoundError, ImagePullError, RunnerError
 from plms.runner import RunSpec, SubprocessDockerRunner, build_argv
 
 
@@ -143,3 +143,54 @@ def test_manifest_nonzero_exit_raises_image_not_found(tmp_path: Path, monkeypatc
     monkeypatch.setattr(subprocess, "run", fake_run)
     with pytest.raises(ImageNotFoundError):
         SubprocessDockerRunner().manifest("plms-esm2:missing")
+
+
+def test_image_present_true_on_zero_exit(monkeypatch) -> None:
+    def fake_run(argv, capture_output, text, check):  # noqa: ANN001
+        assert argv == ["docker", "image", "inspect", "img@sha256:abc"]
+        return subprocess.CompletedProcess(argv, returncode=0, stdout="[]", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert SubprocessDockerRunner().image_present("img@sha256:abc") is True
+
+
+def test_image_present_false_on_nonzero_exit(monkeypatch) -> None:
+    def fake_run(argv, capture_output, text, check):  # noqa: ANN001
+        return subprocess.CompletedProcess(argv, returncode=1, stdout="", stderr="No such image")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert SubprocessDockerRunner().image_present("img@sha256:abc") is False
+
+
+def test_pull_success_invokes_docker_pull(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(argv, capture_output, text, check):  # noqa: ANN001
+        captured["argv"] = argv
+        return subprocess.CompletedProcess(argv, returncode=0, stdout="pulled", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    SubprocessDockerRunner().pull("ghcr.io/briney/plms-esm2@sha256:abc")
+    assert captured["argv"] == ["docker", "pull", "ghcr.io/briney/plms-esm2@sha256:abc"]
+
+
+def test_pull_nonzero_raises_image_pull_error(monkeypatch) -> None:
+    def fake_run(argv, capture_output, text, check):  # noqa: ANN001
+        return subprocess.CompletedProcess(
+            argv, returncode=1, stdout="", stderr="network unreachable"
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(ImagePullError, match="network unreachable"):
+        SubprocessDockerRunner().pull("img@sha256:abc")
+
+
+def test_pull_auth_error_adds_login_hint(monkeypatch) -> None:
+    def fake_run(argv, capture_output, text, check):  # noqa: ANN001
+        return subprocess.CompletedProcess(
+            argv, returncode=1, stdout="", stderr="denied: access forbidden"
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(ImagePullError, match="docker login ghcr.io"):
+        SubprocessDockerRunner().pull("img@sha256:abc")
