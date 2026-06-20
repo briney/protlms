@@ -1,27 +1,39 @@
-# plms model registry — maps model names/aliases to local Docker image references.
+# plms model registry — maps model names/aliases to GHCR Docker image references.
 #
-# Phase 0 images are built locally from containers/esm2 (see that directory's
-# README). Add an entry per model; `name` is canonical, `aliases` are accepted
-# alternatives, `image` is the Docker image reference, `model_family` groups
-# related models.
+# Images are published to GHCR; digests are pinned by .github/workflows/publish-image.yaml.
 models:
   - name: esm2-8m
     aliases: [esm2_t6_8M]
-    image: plms-esm2:t6_8M
+    image: ghcr.io/briney/plms-esm2:t6_8M
     model_family: esm2
+    build:
+      context: containers/esm2
+      args: { ESM2_CHECKPOINT: esm2_t6_8M }
   - name: esm2-650m
     aliases: [esm2_t33_650M]
-    image: plms-esm2:t33_650M
+    image: ghcr.io/briney/plms-esm2:t33_650M
     model_family: esm2
+    build:
+      context: containers/esm2
+      args: { ESM2_CHECKPOINT: esm2_t33_650M }
   - name: progen2-small
     aliases: [progen2_small]
-    image: plms-progen2:small
+    image: ghcr.io/briney/plms-progen2:small
     model_family: progen2
+    build:
+      context: containers/progen2
+      args: { PROGEN2_CHECKPOINT: progen2-small }
   - name: esm-c-300m
     aliases: [esmc_300m]
-    image: plms-esm-c:300m
+    image: ghcr.io/briney/plms-esm-c:300m
     model_family: esm-c
+    build:
+      context: containers/esm-c
+      args: { ESMC_CHECKPOINT: esmc_300m }
   - name: esm-c-600m
     aliases: [esmc_600m]
-    image: plms-esm-c:600m
+    image: ghcr.io/briney/plms-esm-c:600m
     model_family: esm-c
+    build:
+      context: containers/esm-c
+      args: { ESMC_CHECKPOINT: esmc_600m }

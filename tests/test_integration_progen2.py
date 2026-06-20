@@ -12,7 +12,7 @@ import pytest
 
 import plms
 
-IMAGE = "plms-progen2:small"
+IMAGE = "ghcr.io/briney/plms-progen2:small"
 REPO_ROOT = Path(__file__).parents[1]
 PROMPTS = REPO_ROOT / "tests" / "data" / "prompts.fasta"
 SEQS = REPO_ROOT / "tests" / "data" / "tiny.fasta"
@@ -57,7 +57,7 @@ def progen2_image() -> str:
 
 @pytest.fixture(scope="session")
 def model(progen2_image: str) -> plms.Model:
-    return plms.load("progen2-small")
+    return plms.load("progen2-small", allow_pull=False)
 
 
 def test_manifest_declares_generate_and_likelihood(model: plms.Model) -> None:

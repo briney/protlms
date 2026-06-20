@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from plms.exceptions import ImageNotFoundError, RunnerError
-from plms.runner import RunSpec, SubprocessDockerRunner, build_argv
+from plms.exceptions import ImageNotFoundError, ImagePullError, RunnerError
+from plms.runner import RunSpec, SubprocessDockerRunner, build_argv, ensure_image
 
 
 def _spec(tmp_path: Path, **overrides) -> RunSpec:
@@ -143,3 +143,95 @@ def test_manifest_nonzero_exit_raises_image_not_found(tmp_path: Path, monkeypatc
     monkeypatch.setattr(subprocess, "run", fake_run)
     with pytest.raises(ImageNotFoundError):
         SubprocessDockerRunner().manifest("plms-esm2:missing")
+
+
+def test_image_present_true_on_zero_exit(monkeypatch) -> None:
+    def fake_run(argv, capture_output, text, check):  # noqa: ANN001
+        assert argv == ["docker", "image", "inspect", "img@sha256:abc"]
+        return subprocess.CompletedProcess(argv, returncode=0, stdout="[]", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert SubprocessDockerRunner().image_present("img@sha256:abc") is True
+
+
+def test_image_present_false_on_nonzero_exit(monkeypatch) -> None:
+    def fake_run(argv, capture_output, text, check):  # noqa: ANN001
+        return subprocess.CompletedProcess(argv, returncode=1, stdout="", stderr="No such image")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert SubprocessDockerRunner().image_present("img@sha256:abc") is False
+
+
+def test_pull_success_invokes_docker_pull(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(argv, capture_output, text, check):  # noqa: ANN001
+        captured["argv"] = argv
+        return subprocess.CompletedProcess(argv, returncode=0, stdout="pulled", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    SubprocessDockerRunner().pull("ghcr.io/briney/plms-esm2@sha256:abc")
+    assert captured["argv"] == ["docker", "pull", "ghcr.io/briney/plms-esm2@sha256:abc"]
+
+
+def test_pull_nonzero_raises_image_pull_error(monkeypatch) -> None:
+    def fake_run(argv, capture_output, text, check):  # noqa: ANN001
+        return subprocess.CompletedProcess(
+            argv, returncode=1, stdout="", stderr="network unreachable"
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(ImagePullError, match="network unreachable"):
+        SubprocessDockerRunner().pull("img@sha256:abc")
+
+
+def test_pull_auth_error_adds_login_hint(monkeypatch) -> None:
+    def fake_run(argv, capture_output, text, check):  # noqa: ANN001
+        return subprocess.CompletedProcess(
+            argv, returncode=1, stdout="", stderr="denied: access forbidden"
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(ImagePullError, match="docker login ghcr.io"):
+        SubprocessDockerRunner().pull("img@sha256:abc")
+
+
+class _RecordingRunner:
+    """A minimal Runner stand-in that records pulls."""
+
+    def __init__(self, *, present: bool, pull_error: Exception | None = None) -> None:
+        self._present = present
+        self._pull_error = pull_error
+        self.pulled: list[str] = []
+
+    def image_present(self, ref: str) -> bool:
+        return self._present
+
+    def pull(self, ref: str) -> None:
+        self.pulled.append(ref)
+        if self._pull_error is not None:
+            raise self._pull_error
+
+
+def test_ensure_image_noop_when_present() -> None:
+    runner = _RecordingRunner(present=True)
+    ensure_image(runner, "img@sha256:abc", allow_pull=True, model_name="m")
+    assert runner.pulled == []
+
+
+def test_ensure_image_pulls_when_absent_and_allowed() -> None:
+    runner = _RecordingRunner(present=False)
+    ensure_image(runner, "img@sha256:abc", allow_pull=True, model_name="m")
+    assert runner.pulled == ["img@sha256:abc"]
+
+
+def test_ensure_image_raises_when_absent_and_pull_disabled() -> None:
+    runner = _RecordingRunner(present=False)
+    with pytest.raises(ImageNotFoundError, match="plms pull m"):
+        ensure_image(runner, "img@sha256:abc", allow_pull=False, model_name="m")
+
+
+def test_ensure_image_propagates_pull_error() -> None:
+    runner = _RecordingRunner(present=False, pull_error=ImagePullError("boom"))
+    with pytest.raises(ImagePullError, match="boom"):
+        ensure_image(runner, "img@sha256:abc", allow_pull=True, model_name="m")

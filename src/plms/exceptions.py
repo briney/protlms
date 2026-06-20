@@ -35,6 +35,10 @@ class RunnerError(PlmsError):
     """Raised when the container runtime could not be invoked (e.g. docker missing)."""
 
 
+class ImagePullError(RunnerError):
+    """Raised when ``docker pull`` fails (network, auth, or unknown digest)."""
+
+
 class OutputParseError(PlmsError):
     """Raised when a container's output directory is missing or malformed."""
 
