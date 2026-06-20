@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 import logging
 import shutil
 from pathlib import Path
@@ -19,8 +20,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from plms.contract import ArtifactKind, OutputArtifact, Result
-from plms.exceptions import FastaError, InvalidRequestError
-from plms.io import load_pooled_embeddings, read_fasta
+from plms.exceptions import FastaError, InvalidRequestError, OutputParseError
+from plms.io import load_pooled_embeddings, read_fasta, read_result
 
 if TYPE_CHECKING:
     from plms.io import FastaRecord
@@ -169,3 +170,87 @@ def _merge_fasta(pairs: list[tuple[Path, Result]], output_dir: Path) -> OutputAr
     return OutputArtifact(
         path="generated.fasta", kind=ArtifactKind.GENERATED_FASTA.value, record_ids=ids
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 3: resumable chunk orchestration
+# ---------------------------------------------------------------------------
+
+
+def run_chunked(
+    *,
+    capability: str,
+    records: list[FastaRecord],
+    chunk_size: int,
+    output_dir: Path,
+    run_chunk,  # noqa: ANN001 - closure: (list[FastaRecord], Path) -> Result
+) -> Result:
+    """Run a request in chunks, resuming completed chunks, and merge the outputs.
+
+    With a single chunk this runs directly into ``output_dir`` (no ``chunks/``
+    layout), matching the unchunked path. With more than one chunk each runs into
+    ``output_dir/chunks/chunk_NNNN/``; a chunk whose ``result.json`` already parses
+    is skipped. ``run_chunk`` runs one chunk into a directory and returns its
+    parsed ``Result`` (raising on a failed run).
+    """
+    _check_unique_ids(records)
+    chunks = chunk_records(records, chunk_size)
+    if len(chunks) == 1:
+        return run_chunk(chunks[0], output_dir)
+
+    chunks_dir = output_dir / CHUNKS_DIRNAME
+    chunks_dir.mkdir(parents=True, exist_ok=True)
+    _validate_or_write_manifest(chunks_dir, capability, chunk_size, records)
+
+    pairs: list[tuple[Path, Result]] = []
+    for index, chunk in enumerate(chunks):
+        chunk_dir = chunks_dir / f"chunk_{index:04d}"
+        done = _completed_result(chunk_dir)
+        if done is not None:
+            logger.info("chunk %d/%d already complete; skipping", index + 1, len(chunks))
+            pairs.append((chunk_dir, done))
+            continue
+        logger.info("running chunk %d/%d (%d records)", index + 1, len(chunks), len(chunk))
+        pairs.append((chunk_dir, run_chunk(chunk, chunk_dir)))
+    return merge_chunk_outputs(capability, pairs, output_dir)
+
+
+def _completed_result(chunk_dir: Path) -> Result | None:
+    """Return a chunk's parsed Result if present and valid, else None (re-run)."""
+    if not (chunk_dir / "result.json").is_file():
+        return None
+    try:
+        return read_result(chunk_dir)
+    except OutputParseError:
+        return None
+
+
+def _validate_or_write_manifest(
+    chunks_dir: Path, capability: str, chunk_size: int, records: list[FastaRecord]
+) -> None:
+    """Write or validate the chunking manifest in ``chunks_dir``.
+
+    On first run writes ``chunking.json`` with the capability, chunk_size,
+    n_records, and input fingerprint. On a resume raises
+    :class:`~plms.exceptions.InvalidRequestError` if any field differs.
+    """
+    path = chunks_dir / CHUNKING_MANIFEST_NAME
+    current = {
+        "capability": capability,
+        "chunk_size": chunk_size,
+        "n_records": len(records),
+        "fingerprint": _input_fingerprint(records),
+    }
+    if path.is_file():
+        prev = json.loads(path.read_text())
+        if (
+            prev.get("fingerprint") != current["fingerprint"]
+            or prev.get("chunk_size") != chunk_size
+            or prev.get("capability") != capability
+        ):
+            raise InvalidRequestError(
+                f"chunking manifest in {chunks_dir} does not match this request "
+                "(input or chunk_size changed); use a fresh output_dir"
+            )
+        return
+    path.write_text(json.dumps(current, indent=2))

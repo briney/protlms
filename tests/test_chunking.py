@@ -164,3 +164,119 @@ def test_merge_generated_fasta(tmp_path: Path) -> None:
     merged = merge_chunk_outputs("generate", pairs, out)
     assert set(merged.artifacts[0].record_ids) == {"p0__sample0", "p1__sample0"}
     assert (out / "generated.fasta").read_text().count(">") == 2
+
+
+# ---------------------------------------------------------------------------
+# Task 3: orchestration tests
+# ---------------------------------------------------------------------------
+
+from plms.chunking import CHUNKS_DIRNAME, run_chunked  # noqa: E402
+
+
+class _CountingRunChunk:
+    """A run_chunk closure that writes a minimal embed output and counts calls."""
+
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    def __call__(self, chunk, cdir):  # noqa: ANN001
+        self.calls.append([r.id for r in chunk])
+        cdir.mkdir(parents=True, exist_ok=True)
+        np.savez(cdir / "embeddings.npz", **{r.id: np.ones(320, dtype=np.float32) for r in chunk})
+        (cdir / "result.json").write_text(
+            _json.dumps(
+                {
+                    "contract_version": "0.3",
+                    "capability": "embed",
+                    "model_name": "m",
+                    "n_input_records": len(chunk),
+                    "n_output_records": len(chunk),
+                    "artifacts": [{"path": "embeddings.npz", "kind": "pooled_embeddings"}],
+                    "warnings": [],
+                    "params": {},
+                }
+            )
+        )
+        return Result.model_validate_json((cdir / "result.json").read_text())
+
+
+def test_run_chunked_single_chunk_runs_into_output_dir(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    run = _CountingRunChunk()
+    recs = [_rec(i) for i in range(3)]
+    merged = run_chunked(
+        capability="embed", records=recs, chunk_size=10, output_dir=out, run_chunk=run
+    )
+    assert len(run.calls) == 1
+    assert not (out / CHUNKS_DIRNAME).exists()  # no chunk layout for a single chunk
+    assert merged.n_output_records == 3
+
+
+def test_run_chunked_multi_chunk_merges(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    run = _CountingRunChunk()
+    recs = [_rec(i) for i in range(5)]
+    merged = run_chunked(
+        capability="embed", records=recs, chunk_size=2, output_dir=out, run_chunk=run
+    )
+    assert [len(c) for c in run.calls] == [2, 2, 1]
+    assert merged.n_output_records == 5
+    with np.load(out / "embeddings.npz") as npz:
+        assert set(npz.files) == {f"s{i}" for i in range(5)}
+    assert (out / CHUNKS_DIRNAME / "chunking.json").is_file()
+
+
+def test_run_chunked_skips_completed_chunks(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    recs = [_rec(i) for i in range(5)]
+    # First run completes everything.
+    run_chunked(
+        capability="embed",
+        records=recs,
+        chunk_size=2,
+        output_dir=out,
+        run_chunk=_CountingRunChunk(),
+    )
+    # Second run with the same request must not re-invoke any chunk.
+    run2 = _CountingRunChunk()
+    merged = run_chunked(
+        capability="embed", records=recs, chunk_size=2, output_dir=out, run_chunk=run2
+    )
+    assert run2.calls == []  # all three chunks skipped
+    assert merged.n_output_records == 5
+
+
+def test_run_chunked_rejects_changed_input(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    run_chunked(
+        capability="embed",
+        records=[_rec(i) for i in range(5)],
+        chunk_size=2,
+        output_dir=out,
+        run_chunk=_CountingRunChunk(),
+    )
+    with pytest.raises(InvalidRequestError):
+        run_chunked(
+            capability="embed",
+            records=[_rec(i) for i in range(6)],  # different fingerprint
+            chunk_size=2,
+            output_dir=out,
+            run_chunk=_CountingRunChunk(),
+        )
+
+
+def test_run_chunked_rejects_duplicate_ids(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    with pytest.raises(FastaError):
+        run_chunked(
+            capability="embed",
+            records=[_rec(0), _rec(0)],
+            chunk_size=1,
+            output_dir=out,
+            run_chunk=_CountingRunChunk(),
+        )
