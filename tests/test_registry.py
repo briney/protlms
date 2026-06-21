@@ -99,3 +99,15 @@ def test_build_spec_parsed_from_entry() -> None:
     assert isinstance(entry.build, BuildSpec)
     assert entry.build.context == "containers/esm2"
     assert entry.build.args["ESM2_CHECKPOINT"] == "esm2_t6_8M"
+
+
+def test_resolve_protbert() -> None:
+    registry = Registry.load()
+    base = registry.resolve("protbert")
+    assert base.image == "ghcr.io/briney/protlms-protbert:uniref100"
+    assert base.model_family == "protbert"
+    assert registry.resolve("prot_bert") == base
+    bfd = registry.resolve("protbert-bfd")
+    assert bfd.image == "ghcr.io/briney/protlms-protbert:bfd"
+    assert bfd.model_family == "protbert"
+    assert registry.resolve("prot_bert_bfd") == bfd

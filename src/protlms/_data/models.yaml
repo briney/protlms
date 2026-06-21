@@ -37,3 +37,17 @@ models:
     build:
       context: containers/esm-c
       args: { ESMC_CHECKPOINT: esmc_600m }
+  - name: protbert
+    aliases: [prot_bert]
+    image: ghcr.io/briney/protlms-protbert:uniref100
+    model_family: protbert
+    build:
+      context: containers/protbert
+      args: { PROTBERT_CHECKPOINT: prot_bert }
+  - name: protbert-bfd
+    aliases: [prot_bert_bfd]
+    image: ghcr.io/briney/protlms-protbert:bfd
+    model_family: protbert
+    build:
+      context: containers/protbert
+      args: { PROTBERT_CHECKPOINT: prot_bert_bfd }
