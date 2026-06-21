@@ -1,7 +1,7 @@
 """Model registry: resolve model names/aliases to Docker image references.
 
 The registry is backed by a human-editable YAML file. The default registry
-ships inside the package (``plms/_data/models.yaml``); a custom file can be
+ships inside the package (``protlms/_data/models.yaml``); a custom file can be
 supplied for testing or local overrides.
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, field_validator
 
-from plms.exceptions import ModelNotFoundError
+from protlms.exceptions import ModelNotFoundError
 
 _DEFAULT_REGISTRY_RESOURCE = "_data/models.yaml"
 
@@ -83,7 +83,7 @@ class Registry:
             The loaded registry.
         """
         if path is None:
-            text = resources.files("plms").joinpath(_DEFAULT_REGISTRY_RESOURCE).read_text()
+            text = resources.files("protlms").joinpath(_DEFAULT_REGISTRY_RESOURCE).read_text()
         else:
             text = Path(path).read_text()
         data = yaml.safe_load(text) or {}

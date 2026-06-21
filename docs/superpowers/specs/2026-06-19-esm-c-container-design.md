@@ -1,6 +1,6 @@
 # Design: ESM-C container (masked LM, native `esm` SDK)
 
-> **Status:** Approved design. Completes Phase 1 of the plms roadmap — adds the
+> **Status:** Approved design. Completes Phase 1 of the protlms roadmap — adds the
 > third first-wave model (ESM-C), a modern general masked LM. Builds on the
 > Phase 0 contract + client and the Phase 1 `score`/`generate` work.
 
@@ -38,7 +38,7 @@ wave and already sketches `containers/esm-c/` in the repo layout.
 **None.** `embed`/`likelihood`/`score` and the neutralized `likelihoods.csv`
 schema already exist as of `0.3`. ESM-C declares `contract_version "0.3"` and is
 a purely additive model integration. `docs/CONTRACT.md` and
-`src/plms/contract.py` are untouched.
+`src/protlms/contract.py` are untouched.
 
 ## Client changes
 
@@ -46,9 +46,9 @@ a purely additive model integration. `docs/CONTRACT.md` and
 stay as-is — they are already generic over these three capabilities (all
 exercised today by ESM2). The only client-side touches:
 
-- **`src/plms/_data/models.yaml`** — two entries:
-  - `esm-c-300m` (alias `esmc_300m`) → `plms-esm-c:300m`, family `esm-c`
-  - `esm-c-600m` (alias `esmc_600m`) → `plms-esm-c:600m`, family `esm-c`
+- **`src/protlms/_data/models.yaml`** — two entries:
+  - `esm-c-300m` (alias `esmc_300m`) → `protlms-esm-c:300m`, family `esm-c`
+  - `esm-c-600m` (alias `esmc_600m`) → `protlms-esm-c:600m`, family `esm-c`
 - **`tests/test_registry.py`** — assert both names/aliases resolve to their
   images and family.
 
@@ -124,7 +124,7 @@ CPU); a small non-null hint for 600M. `default_batch_size` set sensibly.
 - `tests/test_registry.py` — both `esm-c-300m`/`esm-c-600m` names + aliases
   resolve to their images and family `esm-c`.
 
-**Integration (docker-gated, `@pytest.mark.slow`, `PLMS_RUN_DOCKER_TESTS=1`):**
+**Integration (docker-gated, `@pytest.mark.slow`, `PROTLMS_RUN_DOCKER_TESTS=1`):**
 `tests/test_integration_esmc.py`, mirroring `tests/test_integration_esm2.py`,
 against the built **300M** image:
 - `manifest` shows `model_family "esm-c"`, `capabilities
@@ -140,13 +140,13 @@ against the built **300M** image:
 ## Verification
 
 ```bash
-docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t plms-esm-c:300m containers/esm-c
-docker run --rm plms-esm-c:300m manifest
-plms embed      esm-c-300m seqs.fasta     -o out/ --pooling mean
-plms likelihood esm-c-300m seqs.fasta     -o out/
-plms score      esm-c-300m variants.csv   -o out/
+docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t protlms-esm-c:300m containers/esm-c
+docker run --rm protlms-esm-c:300m manifest
+protlms embed      esm-c-300m seqs.fasta     -o out/ --pooling mean
+protlms likelihood esm-c-300m seqs.fasta     -o out/
+protlms score      esm-c-300m variants.csv   -o out/
 ```
-Then `pytest` (unit) green; `PLMS_RUN_DOCKER_TESTS=1 pytest -m slow` green for
+Then `pytest` (unit) green; `PROTLMS_RUN_DOCKER_TESTS=1 pytest -m slow` green for
 ESM-C; `ruff check src/ tests/`, `ruff format --check src/ tests/`,
 `ty check src/` clean.
 

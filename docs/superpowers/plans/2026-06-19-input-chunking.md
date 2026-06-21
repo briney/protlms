@@ -4,7 +4,7 @@
 
 **Goal:** Add a client-side `chunk_size` option to `embed`/`likelihood`/`generate` that shards a large FASTA into multiple container runs, runs them sequentially (resuming completed chunks), and merges the outputs into one logical result — with no contract, container, or `score` changes.
 
-**Architecture:** A new `src/plms/chunking.py` owns three concerns — splitting records, orchestrating per-chunk runs with resume, and merging per-capability outputs. `models.py` decides chunked-vs-single per call and delegates, passing a closure that runs one chunk into a given directory. The merged result is written to disk so the existing `EmbeddingResult`/`LikelihoodResult`/`GenerationResult` handles work unchanged.
+**Architecture:** A new `src/protlms/chunking.py` owns three concerns — splitting records, orchestrating per-chunk runs with resume, and merging per-capability outputs. `models.py` decides chunked-vs-single per call and delegates, passing a closure that runs one chunk into a given directory. The merged result is written to disk so the existing `EmbeddingResult`/`LikelihoodResult`/`GenerationResult` handles work unchanged.
 
 **Tech Stack:** Python 3.11+, pydantic (`contract.Result`/`OutputArtifact`), numpy (npz merge), the existing `Runner` protocol. No new dependencies.
 
@@ -20,7 +20,7 @@ Copied verbatim from `docs/superpowers/specs/2026-06-19-input-chunking-design.md
 - **Output layout (when >1 chunk):** `output_dir/chunks/chunk_NNNN/` (zero-padded to ≥4 digits) each a full container output; `output_dir/chunks/chunking.json` records `capability`, `chunk_size`, `n_records`, and `fingerprint` (sha256 of the ordered record ids).
 - **Resume:** a chunk with a *valid* `result.json` is skipped. A `chunking.json` whose `fingerprint`/`chunk_size`/`capability` differs from the request raises `InvalidRequestError`. A malformed chunk `result.json` is treated as incomplete (re-run). A failed chunk raises `ContainerExecutionError` naming the chunk index.
 - **Duplicate record ids across the whole input** raise `FastaError` before splitting.
-- **New module `src/plms/chunking.py`** owns split/merge/orchestrate; reuses `io.py` + the `Runner`; no Docker specifics.
+- **New module `src/protlms/chunking.py`** owns split/merge/orchestrate; reuses `io.py` + the `Runner`; no Docker specifics.
 - **Generate seed caveat:** with a fixed seed, reproducibility holds only for a fixed `chunk_size` (documented in code/docstring).
 - **Quality gates before each commit:** `ruff check src/ tests/`, `ruff format src/ tests/`, `ty check src/`, `pytest`. Commit style `<component>: <what changed>`, imperative.
 
@@ -28,14 +28,14 @@ Copied verbatim from `docs/superpowers/specs/2026-06-19-input-chunking-design.md
 
 ### Task 1: chunking split + fingerprint helpers
 
-Creates `src/plms/chunking.py` with the pure, torch/Docker-free helpers the later tasks build on.
+Creates `src/protlms/chunking.py` with the pure, torch/Docker-free helpers the later tasks build on.
 
 **Files:**
-- Create: `src/plms/chunking.py`
+- Create: `src/protlms/chunking.py`
 - Test: `tests/test_chunking.py`
 
 **Interfaces:**
-- Consumes: `plms.io.FastaRecord`, `plms.exceptions.{FastaError, InvalidRequestError}`.
+- Consumes: `protlms.io.FastaRecord`, `protlms.exceptions.{FastaError, InvalidRequestError}`.
 - Produces: `chunk_records(records: list[FastaRecord], chunk_size: int) -> list[list[FastaRecord]]`; `_check_unique_ids(records: list[FastaRecord]) -> None`; `_input_fingerprint(records: list[FastaRecord]) -> str`. Module constants `CHUNKS_DIRNAME = "chunks"`, `CHUNKING_MANIFEST_NAME = "chunking.json"`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -49,9 +49,9 @@ from __future__ import annotations
 
 import pytest
 
-from plms.chunking import _check_unique_ids, _input_fingerprint, chunk_records
-from plms.exceptions import FastaError, InvalidRequestError
-from plms.io import FastaRecord
+from protlms.chunking import _check_unique_ids, _input_fingerprint, chunk_records
+from protlms.exceptions import FastaError, InvalidRequestError
+from protlms.io import FastaRecord
 
 
 def _rec(i: int) -> FastaRecord:
@@ -97,18 +97,18 @@ def test_input_fingerprint_is_order_sensitive_and_stable() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_chunking.py -v`
-Expected: FAIL at import — `ModuleNotFoundError: No module named 'plms.chunking'`.
+Expected: FAIL at import — `ModuleNotFoundError: No module named 'protlms.chunking'`.
 
 - [ ] **Step 3: Create the module with the pure helpers**
 
-Create `src/plms/chunking.py`:
+Create `src/protlms/chunking.py`:
 
 ```python
 """Client-side input chunking: split a large input into per-chunk container
 runs and merge the outputs into one logical result.
 
 This module is the only place that knows how to shard a request across multiple
-container runs. It reuses :mod:`plms.io` for file I/O and drives runs through a
+container runs. It reuses :mod:`protlms.io` for file I/O and drives runs through a
 caller-supplied closure, so it depends on no Docker specifics. The contract,
 the containers, and ``score`` are unaffected.
 """
@@ -125,12 +125,12 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from plms.contract import ArtifactKind, OutputArtifact, Result
-from plms.exceptions import FastaError, InvalidRequestError, OutputParseError
-from plms.io import load_pooled_embeddings, read_fasta, read_result
+from protlms.contract import ArtifactKind, OutputArtifact, Result
+from protlms.exceptions import FastaError, InvalidRequestError, OutputParseError
+from protlms.io import load_pooled_embeddings, read_fasta, read_result
 
 if TYPE_CHECKING:
-    from plms.io import FastaRecord
+    from protlms.io import FastaRecord
 
 logger = logging.getLogger(__name__)
 
@@ -170,9 +170,9 @@ Expected: PASS (7 tests).
 - [ ] **Step 5: Format, lint, commit**
 
 ```bash
-ruff format src/plms/chunking.py tests/test_chunking.py
-ruff check src/plms/chunking.py tests/test_chunking.py
-git add src/plms/chunking.py tests/test_chunking.py
+ruff format src/protlms/chunking.py tests/test_chunking.py
+ruff check src/protlms/chunking.py tests/test_chunking.py
+git add src/protlms/chunking.py tests/test_chunking.py
 git commit -m "chunking: record splitting + input fingerprint helpers"
 ```
 
@@ -183,7 +183,7 @@ git commit -m "chunking: record splitting + input fingerprint helpers"
 Adds the merge layer that combines per-chunk outputs into one `output_dir` and synthesizes a `result.json`.
 
 **Files:**
-- Modify: `src/plms/chunking.py` (append merge functions)
+- Modify: `src/protlms/chunking.py` (append merge functions)
 - Test: `tests/test_chunking.py` (append merge tests)
 
 **Interfaces:**
@@ -200,8 +200,8 @@ from pathlib import Path
 
 import numpy as np
 
-from plms.chunking import merge_chunk_outputs
-from plms.contract import Result
+from protlms.chunking import merge_chunk_outputs
+from protlms.contract import Result
 
 
 def _write_chunk_result(cdir: Path, capability: str, artifacts: list[dict], n: int) -> Result:
@@ -310,7 +310,7 @@ Expected: FAIL — `ImportError: cannot import name 'merge_chunk_outputs'`.
 
 - [ ] **Step 3: Append the merge implementation**
 
-Append to `src/plms/chunking.py`:
+Append to `src/protlms/chunking.py`:
 
 ```python
 def merge_chunk_outputs(
@@ -439,9 +439,9 @@ Expected: PASS (all Task 1 + Task 2 tests).
 - [ ] **Step 5: Format, lint, commit**
 
 ```bash
-ruff format src/plms/chunking.py tests/test_chunking.py
-ruff check src/plms/chunking.py tests/test_chunking.py
-git add src/plms/chunking.py tests/test_chunking.py
+ruff format src/protlms/chunking.py tests/test_chunking.py
+ruff check src/protlms/chunking.py tests/test_chunking.py
+git add src/protlms/chunking.py tests/test_chunking.py
 git commit -m "chunking: per-capability output merge"
 ```
 
@@ -452,7 +452,7 @@ git commit -m "chunking: per-capability output merge"
 Adds the orchestrator that splits, runs each chunk (skipping completed ones), validates the chunking manifest, and merges.
 
 **Files:**
-- Modify: `src/plms/chunking.py` (append orchestration)
+- Modify: `src/protlms/chunking.py` (append orchestration)
 - Test: `tests/test_chunking.py` (append orchestration tests)
 
 **Interfaces:**
@@ -464,7 +464,7 @@ Adds the orchestrator that splits, runs each chunk (skipping completed ones), va
 Append to `tests/test_chunking.py`:
 
 ```python
-from plms.chunking import CHUNKS_DIRNAME, run_chunked
+from protlms.chunking import CHUNKS_DIRNAME, run_chunked
 
 
 class _CountingRunChunk:
@@ -559,7 +559,7 @@ Expected: FAIL — `ImportError: cannot import name 'run_chunked'`.
 
 - [ ] **Step 3: Append the orchestration implementation**
 
-Append to `src/plms/chunking.py`:
+Append to `src/protlms/chunking.py`:
 
 ```python
 def run_chunked(
@@ -643,10 +643,10 @@ Expected: PASS (all chunking unit tests).
 - [ ] **Step 5: Format, lint, type-check, commit**
 
 ```bash
-ruff format src/plms/chunking.py tests/test_chunking.py
-ruff check src/plms/chunking.py tests/test_chunking.py
+ruff format src/protlms/chunking.py tests/test_chunking.py
+ruff check src/protlms/chunking.py tests/test_chunking.py
 ty check src/
-git add src/plms/chunking.py tests/test_chunking.py
+git add src/protlms/chunking.py tests/test_chunking.py
 git commit -m "chunking: resumable chunk orchestration"
 ```
 
@@ -657,11 +657,11 @@ git commit -m "chunking: resumable chunk orchestration"
 Threads `chunk_size` through `embed`/`likelihood`/`generate`, refactoring the run path so a chunk can run into a chosen directory.
 
 **Files:**
-- Modify: `src/plms/models.py`
+- Modify: `src/protlms/models.py`
 - Test: `tests/test_models.py` (append chunking tests)
 
 **Interfaces:**
-- Consumes: `plms.chunking.run_chunked`; existing `stage_inputs`, `read_result`, `RunSpec`, `_resolve_output_dir`, `_raise_container_error`.
+- Consumes: `protlms.chunking.run_chunked`; existing `stage_inputs`, `read_result`, `RunSpec`, `_resolve_output_dir`, `_raise_container_error`.
 - Produces: `chunk_size: int | None = None` keyword on `Model.embed`, `Model.likelihood`, `Model.generate`. New private `Model._run_into_dir(capability, staging, extra_args, out_dir, use_gpu) -> Result` and `Model._run_chunked(capability, records, extra_args, output_dir, use_gpu, chunk_size) -> tuple[Result, Path, TemporaryDirectory | None]`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -719,10 +719,10 @@ Expected: FAIL — `TypeError: embed() got an unexpected keyword argument 'chunk
 
 - [ ] **Step 3: Add the import and the run helpers**
 
-In `src/plms/models.py`, add to the `plms.chunking` import (new line after the `plms.registry` import near the top):
+In `src/protlms/models.py`, add to the `protlms.chunking` import (new line after the `protlms.registry` import near the top):
 
 ```python
-from plms.chunking import run_chunked
+from protlms.chunking import run_chunked
 ```
 
 Replace the existing `_run` method (currently at `models.py:318-346`) with this refactor plus the two new helpers:
@@ -851,10 +851,10 @@ Expected: PASS — the new chunking tests and all pre-existing model tests (the 
 - [ ] **Step 6: Format, lint, type-check, commit**
 
 ```bash
-ruff format src/plms/models.py tests/test_models.py
-ruff check src/plms/models.py tests/test_models.py
+ruff format src/protlms/models.py tests/test_models.py
+ruff check src/protlms/models.py tests/test_models.py
 ty check src/
-git add src/plms/models.py tests/test_models.py
+git add src/protlms/models.py tests/test_models.py
 git commit -m "models: chunk_size on embed/likelihood/generate"
 ```
 
@@ -863,7 +863,7 @@ git commit -m "models: chunk_size on embed/likelihood/generate"
 ### Task 5: expose `--chunk-size` on the CLI
 
 **Files:**
-- Modify: `src/plms/cli.py`
+- Modify: `src/protlms/cli.py`
 - Test: `tests/test_cli.py`
 
 **Interfaces:**
@@ -937,7 +937,7 @@ Then append these tests:
 
 ```python
 def test_embed_command_forwards_chunk_size(fasta: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app,
         ["embed", "esm2-8m", str(fasta), "-o", str(tmp_path / "out"), "--chunk-size", "1000"],
@@ -947,14 +947,14 @@ def test_embed_command_forwards_chunk_size(fasta: Path, tmp_path: Path, monkeypa
 
 
 def test_embed_command_chunk_size_defaults_none(fasta: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(app, ["embed", "esm2-8m", str(fasta), "-o", str(tmp_path / "out")])
     assert result.exit_code == 0, result.stdout
     assert FakeModel.last_call["chunk_size"] is None
 
 
 def test_likelihood_command_forwards_chunk_size(fasta: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app,
         ["likelihood", "esm2-8m", str(fasta), "-o", str(tmp_path / "out"), "--chunk-size", "500"],
@@ -964,7 +964,7 @@ def test_likelihood_command_forwards_chunk_size(fasta: Path, tmp_path: Path, mon
 
 
 def test_generate_command_forwards_chunk_size(prompts: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app,
         ["generate", "progen2-small", str(prompts), "-o", str(tmp_path / "o"), "--chunk-size", "8"],
@@ -980,7 +980,7 @@ Expected: FAIL — Typer reports no such option `--chunk-size` (exit code 2), so
 
 - [ ] **Step 3: Add the CLI option**
 
-In `src/plms/cli.py`, add a reusable option definition next to the others (after `_BatchOpt` at `cli.py:37`):
+In `src/protlms/cli.py`, add a reusable option definition next to the others (after `_BatchOpt` at `cli.py:37`):
 
 ```python
 _ChunkSizeOpt = Annotated[
@@ -1016,10 +1016,10 @@ Expected: PASS (new chunk-size tests + all pre-existing CLI tests).
 - [ ] **Step 5: Format, lint, type-check, commit**
 
 ```bash
-ruff format src/plms/cli.py tests/test_cli.py
-ruff check src/plms/cli.py tests/test_cli.py
+ruff format src/protlms/cli.py tests/test_cli.py
+ruff check src/protlms/cli.py tests/test_cli.py
 ty check src/
-git add src/plms/cli.py tests/test_cli.py
+git add src/protlms/cli.py tests/test_cli.py
 git commit -m "cli: --chunk-size on embed/likelihood/generate"
 ```
 
@@ -1031,10 +1031,10 @@ Proves a chunked run produces the same result as a single run against a real ima
 
 **Files:**
 - Create: `tests/test_integration_chunking.py`
-- Reuses: `tests/data/tiny.fasta` (3 records), the `plms-esm2:t6_8M` image.
+- Reuses: `tests/data/tiny.fasta` (3 records), the `protlms-esm2:t6_8M` image.
 
 **Interfaces:**
-- Consumes: `plms.load("esm2-8m")`, `Model.embed`/`likelihood` with `chunk_size`.
+- Consumes: `protlms.load("esm2-8m")`, `Model.embed`/`likelihood` with `chunk_size`.
 
 - [ ] **Step 1: Write the integration test**
 
@@ -1043,7 +1043,7 @@ Create `tests/test_integration_chunking.py`:
 ```python
 """End-to-end test that chunked runs equal unchunked runs (real ESM2 image).
 
-Gated: runs only when ``PLMS_RUN_DOCKER_TESTS=1`` and a working Docker daemon is
+Gated: runs only when ``PROTLMS_RUN_DOCKER_TESTS=1`` and a working Docker daemon is
 available. Builds the tiny ``esm2_t6_8M`` image if absent.
 """
 
@@ -1058,9 +1058,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import plms
+import protlms
 
-IMAGE = "plms-esm2:t6_8M"
+IMAGE = "protlms-esm2:t6_8M"
 REPO_ROOT = Path(__file__).parents[1]
 TINY_FASTA = REPO_ROOT / "tests" / "data" / "tiny.fasta"
 
@@ -1074,8 +1074,8 @@ def _docker_available() -> bool:
 pytestmark = [
     pytest.mark.slow,
     pytest.mark.skipif(
-        os.environ.get("PLMS_RUN_DOCKER_TESTS") != "1" or not _docker_available(),
-        reason="set PLMS_RUN_DOCKER_TESTS=1 and ensure a Docker daemon is available",
+        os.environ.get("PROTLMS_RUN_DOCKER_TESTS") != "1" or not _docker_available(),
+        reason="set PROTLMS_RUN_DOCKER_TESTS=1 and ensure a Docker daemon is available",
     ),
 ]
 
@@ -1095,11 +1095,11 @@ def esm2_image() -> str:
 
 
 @pytest.fixture(scope="session")
-def model(esm2_image: str) -> plms.Model:
-    return plms.load("esm2-8m")
+def model(esm2_image: str) -> protlms.Model:
+    return protlms.load("esm2-8m")
 
 
-def test_embed_chunked_equals_unchunked(model: plms.Model, tmp_path: Path) -> None:
+def test_embed_chunked_equals_unchunked(model: protlms.Model, tmp_path: Path) -> None:
     plain = model.embed(TINY_FASTA, pooling="mean", output_dir=tmp_path / "plain").pooled()
     chunked = model.embed(
         TINY_FASTA, pooling="mean", output_dir=tmp_path / "chunked", chunk_size=2
@@ -1110,7 +1110,7 @@ def test_embed_chunked_equals_unchunked(model: plms.Model, tmp_path: Path) -> No
     assert (tmp_path / "chunked" / "chunks" / "chunk_0001").is_dir()  # 3 records / 2 => 2 chunks
 
 
-def test_likelihood_chunked_equals_unchunked(model: plms.Model, tmp_path: Path) -> None:
+def test_likelihood_chunked_equals_unchunked(model: protlms.Model, tmp_path: Path) -> None:
     plain = {r["record_id"]: r for r in model.likelihood(TINY_FASTA, output_dir=tmp_path / "p").rows()}
     chunked = {
         r["record_id"]: r
@@ -1125,7 +1125,7 @@ def test_likelihood_chunked_equals_unchunked(model: plms.Model, tmp_path: Path) 
 
 - [ ] **Step 2: Run the integration test (gated)**
 
-Run: `PLMS_RUN_DOCKER_TESTS=1 pytest tests/test_integration_chunking.py -v -m slow`
+Run: `PROTLMS_RUN_DOCKER_TESTS=1 pytest tests/test_integration_chunking.py -v -m slow`
 Expected: PASS. The chunked embed/likelihood results match the unchunked runs within tolerance, and the `chunks/chunk_0001` directory confirms real sharding occurred.
 
 - [ ] **Step 3: Run the full unit suite + gates**

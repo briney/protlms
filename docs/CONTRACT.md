@@ -1,10 +1,10 @@
-# The plms Container Contract
+# The protlms Container Contract
 
 > **Contract version:** `0.3`
 >
-> This document is the agreement between the `plms` client and every model
+> This document is the agreement between the `protlms` client and every model
 > image. It is the *only* thing the two sides share. Its schemas are mirrored
-> exactly by the Pydantic models in [`src/plms/contract.py`](../src/plms/contract.py);
+> exactly by the Pydantic models in [`src/protlms/contract.py`](../src/protlms/contract.py);
 > **edit the two together.** The worked examples here are checked in under
 > [`tests/data/`](../tests/data/) and validated by `tests/test_contract.py`, so a
 > drift between this document and the code fails a test.
@@ -69,7 +69,7 @@ The image's `ENTRYPOINT` is the contract CLI. It MUST expose these subcommands:
   `--gpus`. If `cuda` is requested but unavailable, the image emits a
   `DeviceUnavailable` error (section 6).
 
-The `plms` client always launches with mounts `-v <host_in>:/in:ro` and
+The `protlms` client always launches with mounts `-v <host_in>:/in:ro` and
 `-v <host_out>:/out:rw`, and passes `--gpus all` when a GPU is requested.
 
 ---
@@ -77,7 +77,7 @@ The `plms` client always launches with mounts `-v <host_in>:/in:ro` and
 ## 3. Manifest schema
 
 Emitted as JSON on stdout by the `manifest` subcommand. Mirrors
-`plms.contract.Manifest`.
+`protlms.contract.Manifest`.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -181,7 +181,7 @@ whose value is `"masked_marginal"` (masked LMs such as ESM2) or `"causal"`
 ## 5. `result.json` schema
 
 The success summary written to `/out/result.json`. Mirrors
-`plms.contract.Result` + `OutputArtifact`.
+`protlms.contract.Result` + `OutputArtifact`.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -272,7 +272,7 @@ The success summary written to `/out/result.json`. Mirrors
 
 - **Success:** exit code `0` **and** `/out/result.json` present.
 - **Failure:** non-zero exit code. The image writes a single JSON object as the
-  last line of **stderr**, matching `plms.contract.ContainerError`:
+  last line of **stderr**, matching `protlms.contract.ContainerError`:
 
 ```json
 {"contract_version": "0.3", "error_type": "SequenceTooLong",
@@ -300,7 +300,7 @@ raises with the raw stderr tail so the failure is still legible.
 2. Bake weights into the image at build time (reproducible, offline runtime).
 3. Emit a manifest whose `contract_version` matches a major version the client
    supports.
-4. Register the image in [`src/plms/_data/models.yaml`](../src/plms/_data/models.yaml).
+4. Register the image in [`src/protlms/_data/models.yaml`](../src/protlms/_data/models.yaml).
 
 The client does not change. See [`containers/esm2/`](../containers/esm2/) for a
 reference implementation.

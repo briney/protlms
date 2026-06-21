@@ -1,9 +1,9 @@
-"""plms: unified toolkit for inference across a variety of protein language models (pLMs)."""
+"""protlms: unified toolkit for inference across a variety of protein language models (pLMs)."""
 
 from __future__ import annotations
 
-from plms.contract import Capability, Manifest, PoolingMode, Result
-from plms.exceptions import (
+from protlms.contract import Capability, Manifest, PoolingMode, Result
+from protlms.exceptions import (
     CapabilityNotSupportedError,
     ContainerExecutionError,
     ContractVersionError,
@@ -12,10 +12,10 @@ from plms.exceptions import (
     InvalidRequestError,
     ModelNotFoundError,
     OutputParseError,
-    PlmsError,
+    ProtlmsError,
     RunnerError,
 )
-from plms.models import (
+from protlms.models import (
     EmbeddingResult,
     GenerationResult,
     LikelihoodResult,
@@ -23,7 +23,7 @@ from plms.models import (
     ScoreResult,
     load,
 )
-from plms.registry import ModelEntry, Registry
+from protlms.registry import ModelEntry, Registry
 
 __version__ = "0.1.0"
 
@@ -41,7 +41,7 @@ __all__ = [
     "Result",
     "Capability",
     "PoolingMode",
-    "PlmsError",
+    "ProtlmsError",
     "ModelNotFoundError",
     "ImageNotFoundError",
     "ContractVersionError",

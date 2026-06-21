@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from plms.contract import (
+from protlms.contract import (
     CONTRACT_VERSION,
     Capability,
     ContainerError,
@@ -18,7 +18,7 @@ from plms.contract import (
     parse_container_error,
     parse_contract_version,
 )
-from plms.exceptions import ContainerExecutionError, ContractVersionError
+from protlms.exceptions import ContainerExecutionError, ContractVersionError
 
 
 def _manifest_dict() -> dict:

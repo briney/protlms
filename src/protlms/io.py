@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from plms.contract import ArtifactKind, Result
-from plms.exceptions import FastaError, InvalidRequestError, OutputParseError
+from protlms.contract import ArtifactKind, Result
+from protlms.exceptions import FastaError, InvalidRequestError, OutputParseError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -130,7 +130,7 @@ def stage_inputs(records: list[FastaRecord]) -> Iterator[StagedInput]:
     if duplicates:
         raise FastaError(f"duplicate record ids in input: {sorted(duplicates)}")
 
-    with tempfile.TemporaryDirectory(prefix="plms-in-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="protlms-in-") as tmp:
         input_dir = Path(tmp)
         write_fasta(records, input_dir / STAGED_FASTA_NAME)
         yield StagedInput(input_dir=input_dir)
@@ -147,7 +147,7 @@ def stage_file(src: Path, dest_name: str) -> Iterator[StagedInput]:
     Yields:
         A :class:`StagedInput` pointing at the host input directory.
     """
-    with tempfile.TemporaryDirectory(prefix="plms-in-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="protlms-in-") as tmp:
         input_dir = Path(tmp)
         shutil.copyfile(src, input_dir / dest_name)
         yield StagedInput(input_dir=input_dir, input_filename=dest_name)
@@ -173,7 +173,7 @@ def read_result(out_dir: Path) -> Result:
         out_dir: The host output directory the container wrote to.
 
     Returns:
-        The parsed :class:`~plms.contract.Result`.
+        The parsed :class:`~protlms.contract.Result`.
 
     Raises:
         OutputParseError: If ``result.json`` is missing or malformed.

@@ -1,6 +1,6 @@
 # Design: `generate` + ProGen2 (autoregressive generation)
 
-> **Status:** Approved design. Phase 1b of the plms roadmap — the fourth
+> **Status:** Approved design. Phase 1b of the protlms roadmap — the fourth
 > capability (`generate`) plus a second model family (ProGen2, autoregressive),
 > proving the contract spans a fundamentally different architecture. Builds on
 > the Phase 0 contract + client and the Phase 1a `score` work.
@@ -115,11 +115,11 @@ cheap moment.
   Validates `Capability.GENERATE`; reads records (≥1 required; empty sequences
   allowed) via the existing `_read_records`; stages via `stage_inputs`; builds
   the `generate` command (only emitting flags the caller set). Reuses `_run`.
-- **`cli.py`** — `plms generate MODEL prompts.fasta -o OUT [--num-samples N]
+- **`cli.py`** — `protlms generate MODEL prompts.fasta -o OUT [--num-samples N]
   [--temperature T] [--top-p P] [--max-length L] [--seed S] [--gpu/--no-gpu]
   [--batch-size N]`.
 - **`registry.py`** — add `progen2-small` (alias `progen2_small`) →
-  `plms-progen2:small`, family `progen2`.
+  `protlms-progen2:small`, family `progen2`.
 - **`__init__.py`** — export `GenerationResult`.
 
 `_read_records` currently rejects empty input and warns on overlong sequences;
@@ -155,15 +155,15 @@ unchanged.
   `sequences()` reflects the staged prompts × `num_samples`; command-building
   emits only the flags set; `CapabilityNotSupportedError` when a model lacks
   `generate`; `InvalidRequestError` on an empty prompts file.
-- `test_cli.py` — `plms generate` invokes `Model.generate` with the right kwargs;
-  `PlmsError` → clean exit 1.
+- `test_cli.py` — `protlms generate` invokes `Model.generate` with the right kwargs;
+  `ProtlmsError` → clean exit 1.
 - ProGen2 entrypoint pure-helper tests (e.g. a control-token-stripping / output
   header helper).
 - Update the existing ESM2 likelihood unit/fixture expectations to the neutral
   column names.
 
-**Integration (docker-gated, `@pytest.mark.slow`, `PLMS_RUN_DOCKER_TESTS=1`):**
-- Build `plms-progen2:small`; `docker run ... manifest` shows
+**Integration (docker-gated, `@pytest.mark.slow`, `PROTLMS_RUN_DOCKER_TESTS=1`):**
+- Build `protlms-progen2:small`; `docker run ... manifest` shows
   `capabilities ["generate","likelihood"]`, `contract_version "0.3"`.
 - **Determinism anchor:** `generate` with a fixed `--seed` run twice produces
   identical `generated.fasta` (the deterministic correctness check for this
@@ -179,12 +179,12 @@ unchanged.
 ## Verification
 
 ```bash
-docker build --build-arg PROGEN2_CHECKPOINT=progen2-small -t plms-progen2:small containers/progen2
-docker run --rm plms-progen2:small manifest
-plms generate progen2-small prompts.fasta -o out/ --num-samples 4 --temperature 0.8 --top-p 0.9 --seed 42
-plms likelihood progen2-small seqs.fasta -o out/
+docker build --build-arg PROGEN2_CHECKPOINT=progen2-small -t protlms-progen2:small containers/progen2
+docker run --rm protlms-progen2:small manifest
+protlms generate progen2-small prompts.fasta -o out/ --num-samples 4 --temperature 0.8 --top-p 0.9 --seed 42
+protlms likelihood progen2-small seqs.fasta -o out/
 ```
-Then `pytest` (unit) green; `PLMS_RUN_DOCKER_TESTS=1 pytest -m slow` green (both
+Then `pytest` (unit) green; `PROTLMS_RUN_DOCKER_TESTS=1 pytest -m slow` green (both
 ProGen2 and the rebuilt ESM2); `ruff check`, `ruff format --check`,
 `ty check src/` clean.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Contract-compliant entrypoint for the ESM2 model image.
 
-Implements the plms container contract (see docs/CONTRACT.md) for the ESM2
+Implements the protlms container contract (see docs/CONTRACT.md) for the ESM2
 masked protein language model via HuggingFace ``transformers``. Exposes the
 ``manifest``, ``embed``, ``likelihood``, and ``score`` subcommands plus a hidden
 ``_prefetch`` used at build time to bake weights into the image.
@@ -456,7 +456,7 @@ def _write_capability_result(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="esm2", description="ESM2 plms contract entrypoint.")
+    parser = argparse.ArgumentParser(prog="esm2", description="ESM2 protlms contract entrypoint.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("manifest").set_defaults(func=cmd_manifest)

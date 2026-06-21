@@ -2,7 +2,7 @@
 runs and merge the outputs into one logical result.
 
 This module is the only place that knows how to shard a request across multiple
-container runs. It reuses :mod:`plms.io` for file I/O and drives runs through a
+container runs. It reuses :mod:`protlms.io` for file I/O and drives runs through a
 caller-supplied closure, so it depends on no Docker specifics. The contract,
 the containers, and ``score`` are unaffected.
 """
@@ -19,17 +19,17 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from plms.contract import ArtifactKind, OutputArtifact, Result
-from plms.exceptions import (
+from protlms.contract import ArtifactKind, OutputArtifact, Result
+from protlms.exceptions import (
     ContainerExecutionError,
     FastaError,
     InvalidRequestError,
     OutputParseError,
 )
-from plms.io import load_pooled_embeddings, read_fasta, read_result
+from protlms.io import load_pooled_embeddings, read_fasta, read_result
 
 if TYPE_CHECKING:
-    from plms.io import FastaRecord
+    from protlms.io import FastaRecord
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +250,7 @@ def _validate_or_write_manifest(
 
     On first run writes ``chunking.json`` with the capability, chunk_size,
     n_records, and input fingerprint. On a resume raises
-    :class:`~plms.exceptions.InvalidRequestError` if any field differs.
+    :class:`~protlms.exceptions.InvalidRequestError` if any field differs.
     """
     path = chunks_dir / CHUNKING_MANIFEST_NAME
     current = {

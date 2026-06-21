@@ -8,10 +8,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from plms.chunking import _check_unique_ids, _input_fingerprint, chunk_records, merge_chunk_outputs
-from plms.contract import Result
-from plms.exceptions import FastaError, InvalidRequestError
-from plms.io import FastaRecord
+from protlms.chunking import (
+    _check_unique_ids,
+    _input_fingerprint,
+    chunk_records,
+    merge_chunk_outputs,
+)
+from protlms.contract import Result
+from protlms.exceptions import FastaError, InvalidRequestError
+from protlms.io import FastaRecord
 
 
 def _rec(i: int) -> FastaRecord:
@@ -170,7 +175,7 @@ def test_merge_generated_fasta(tmp_path: Path) -> None:
 # Task 3: orchestration tests
 # ---------------------------------------------------------------------------
 
-from plms.chunking import CHUNKS_DIRNAME, run_chunked  # noqa: E402
+from protlms.chunking import CHUNKS_DIRNAME, run_chunked  # noqa: E402
 
 
 class _CountingRunChunk:
@@ -283,7 +288,7 @@ def test_run_chunked_rejects_duplicate_ids(tmp_path: Path) -> None:
 
 
 def test_run_chunked_failed_chunk_names_index(tmp_path: Path) -> None:
-    from plms.exceptions import ContainerExecutionError
+    from protlms.exceptions import ContainerExecutionError
 
     out = tmp_path / "out"
     out.mkdir()

@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-import plms
+import protlms
 
-IMAGE = "ghcr.io/briney/plms-progen2:small"
+IMAGE = "ghcr.io/briney/protlms-progen2:small"
 REPO_ROOT = Path(__file__).parents[1]
 PROMPTS = REPO_ROOT / "tests" / "data" / "prompts.fasta"
 SEQS = REPO_ROOT / "tests" / "data" / "tiny.fasta"
@@ -28,8 +28,8 @@ def _docker_available() -> bool:
 pytestmark = [
     pytest.mark.slow,
     pytest.mark.skipif(
-        os.environ.get("PLMS_RUN_DOCKER_TESTS") != "1" or not _docker_available(),
-        reason="set PLMS_RUN_DOCKER_TESTS=1 and ensure a Docker daemon is available",
+        os.environ.get("PROTLMS_RUN_DOCKER_TESTS") != "1" or not _docker_available(),
+        reason="set PROTLMS_RUN_DOCKER_TESTS=1 and ensure a Docker daemon is available",
     ),
 ]
 
@@ -56,17 +56,17 @@ def progen2_image() -> str:
 
 
 @pytest.fixture(scope="session")
-def model(progen2_image: str) -> plms.Model:
-    return plms.load("progen2-small", allow_pull=False)
+def model(progen2_image: str) -> protlms.Model:
+    return protlms.load("progen2-small", allow_pull=False)
 
 
-def test_manifest_declares_generate_and_likelihood(model: plms.Model) -> None:
+def test_manifest_declares_generate_and_likelihood(model: protlms.Model) -> None:
     caps = {c.value for c in model.manifest.capabilities}
     assert {"generate", "likelihood"} <= caps
     assert model.manifest.pooling_modes == []
 
 
-def test_generate_is_deterministic_with_seed(model: plms.Model, tmp_path: Path) -> None:
+def test_generate_is_deterministic_with_seed(model: protlms.Model, tmp_path: Path) -> None:
     first = model.generate(
         PROMPTS, num_samples=2, temperature=0.8, top_p=0.9, seed=7, output_dir=tmp_path / "a"
     )
@@ -79,7 +79,7 @@ def test_generate_is_deterministic_with_seed(model: plms.Model, tmp_path: Path) 
     assert a == b  # same seed => identical output
 
 
-def test_generate_produces_valid_sequences(model: plms.Model, tmp_path: Path) -> None:
+def test_generate_produces_valid_sequences(model: protlms.Model, tmp_path: Path) -> None:
     result = model.generate(
         PROMPTS, num_samples=2, max_length=64, seed=1, output_dir=tmp_path / "gen"
     )
@@ -96,7 +96,7 @@ def test_generate_produces_valid_sequences(model: plms.Model, tmp_path: Path) ->
         assert len(record.sequence) <= 64
 
 
-def test_progen2_likelihood(model: plms.Model, tmp_path: Path) -> None:
+def test_progen2_likelihood(model: protlms.Model, tmp_path: Path) -> None:
     result = model.likelihood(SEQS, output_dir=tmp_path / "ll")
     rows = result.rows()
     assert len(rows) == 3

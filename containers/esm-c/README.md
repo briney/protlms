@@ -2,7 +2,7 @@
 
 A contract-compliant Docker image wrapping the
 [ESM-C](https://huggingface.co/EvolutionaryScale/esmc-300m-2024-12) masked
-protein language model (EvolutionaryScale). It implements the plms container
+protein language model (EvolutionaryScale). It implements the protlms container
 contract (see [`../../docs/CONTRACT.md`](../../docs/CONTRACT.md)) using the native
 `esm` SDK, and exposes the `manifest`, `embed`, `likelihood`, and `score`
 subcommands.
@@ -14,10 +14,10 @@ its weights are baked into the image, so runtime requires no network access.
 
 ```bash
 # 300M (demo / CI default)
-docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t plms-esm-c:300m containers/esm-c
+docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t protlms-esm-c:300m containers/esm-c
 
 # 600M
-docker build --build-arg ESMC_CHECKPOINT=esmc_600m -t plms-esm-c:600m containers/esm-c
+docker build --build-arg ESMC_CHECKPOINT=esmc_600m -t protlms-esm-c:600m containers/esm-c
 ```
 
 `ESMC_CHECKPOINT` accepts `esmc_300m` or `esmc_600m`. The 300M/600M weights are
@@ -27,17 +27,17 @@ EvolutionaryScale Forge API-only and is not supported by this image.
 ## Running directly (debugging)
 
 ```bash
-docker run --rm plms-esm-c:300m manifest
+docker run --rm protlms-esm-c:300m manifest
 
 docker run --rm -v "$PWD/in:/in:ro" -v "$PWD/out:/out:rw" \
-  plms-esm-c:300m embed --input /in/seqs.fasta --output /out --pooling mean
+  protlms-esm-c:300m embed --input /in/seqs.fasta --output /out --pooling mean
 
 docker run --rm --gpus all -v "$PWD/in:/in:ro" -v "$PWD/out:/out:rw" \
-  plms-esm-c:300m likelihood --input /in/seqs.fasta --output /out
+  protlms-esm-c:300m likelihood --input /in/seqs.fasta --output /out
 ```
 
-Normally you do not run these by hand — the `plms` client builds these commands
-for you (`plms embed esm-c-300m seqs.fasta -o out/`).
+Normally you do not run these by hand — the `protlms` client builds these commands
+for you (`protlms embed esm-c-300m seqs.fasta -o out/`).
 
 ## Models
 

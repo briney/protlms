@@ -1,6 +1,6 @@
 """End-to-end test that chunked runs equal unchunked runs (real ESM2 image).
 
-Gated: runs only when ``PLMS_RUN_DOCKER_TESTS=1`` and a working Docker daemon is
+Gated: runs only when ``PROTLMS_RUN_DOCKER_TESTS=1`` and a working Docker daemon is
 available. Builds the tiny ``esm2_t6_8M`` image if absent.
 """
 
@@ -15,9 +15,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import plms
+import protlms
 
-IMAGE = "plms-esm2:t6_8M"
+IMAGE = "protlms-esm2:t6_8M"
 REPO_ROOT = Path(__file__).parents[1]
 TINY_FASTA = REPO_ROOT / "tests" / "data" / "tiny.fasta"
 
@@ -31,8 +31,8 @@ def _docker_available() -> bool:
 pytestmark = [
     pytest.mark.slow,
     pytest.mark.skipif(
-        os.environ.get("PLMS_RUN_DOCKER_TESTS") != "1" or not _docker_available(),
-        reason="set PLMS_RUN_DOCKER_TESTS=1 and ensure a Docker daemon is available",
+        os.environ.get("PROTLMS_RUN_DOCKER_TESTS") != "1" or not _docker_available(),
+        reason="set PROTLMS_RUN_DOCKER_TESTS=1 and ensure a Docker daemon is available",
     ),
 ]
 
@@ -59,11 +59,11 @@ def esm2_image() -> str:
 
 
 @pytest.fixture(scope="session")
-def model(esm2_image: str) -> plms.Model:
-    return plms.load("esm2-8m")
+def model(esm2_image: str) -> protlms.Model:
+    return protlms.load("esm2-8m")
 
 
-def test_embed_chunked_equals_unchunked(model: plms.Model, tmp_path: Path) -> None:
+def test_embed_chunked_equals_unchunked(model: protlms.Model, tmp_path: Path) -> None:
     plain = model.embed(TINY_FASTA, pooling="mean", output_dir=tmp_path / "plain").pooled()
     chunked = model.embed(
         TINY_FASTA, pooling="mean", output_dir=tmp_path / "chunked", chunk_size=2
@@ -74,7 +74,7 @@ def test_embed_chunked_equals_unchunked(model: plms.Model, tmp_path: Path) -> No
     assert (tmp_path / "chunked" / "chunks" / "chunk_0001").is_dir()  # 3 records / 2 => 2 chunks
 
 
-def test_likelihood_chunked_equals_unchunked(model: plms.Model, tmp_path: Path) -> None:
+def test_likelihood_chunked_equals_unchunked(model: protlms.Model, tmp_path: Path) -> None:
     plain = {
         r["record_id"]: r for r in model.likelihood(TINY_FASTA, output_dir=tmp_path / "p").rows()
     }

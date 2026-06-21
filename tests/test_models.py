@@ -8,17 +8,17 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from plms.exceptions import (
+from protlms.exceptions import (
     CapabilityNotSupportedError,
     ContainerExecutionError,
     ContractVersionError,
     ImageNotFoundError,
     InvalidRequestError,
 )
-from plms.io import read_fasta
-from plms.models import EmbeddingResult, LikelihoodResult, Model, load
-from plms.registry import ModelEntry, Registry
-from plms.runner import RunResult, RunSpec
+from protlms.io import read_fasta
+from protlms.models import EmbeddingResult, LikelihoodResult, Model, load
+from protlms.registry import ModelEntry, Registry
+from protlms.runner import RunResult, RunSpec
 
 EMBEDDING_DIM = 320
 
@@ -299,7 +299,7 @@ def variants_csv(tmp_path: Path) -> Path:
 
 
 def test_score_returns_rows(variants_csv: Path, tmp_path: Path) -> None:
-    from plms.models import ScoreResult
+    from protlms.models import ScoreResult
 
     model = _load()
     result = model.score(variants_csv, output_dir=tmp_path / "sc")
@@ -348,7 +348,7 @@ def prompts(tmp_path: Path) -> Path:
 
 
 def test_generate_returns_sequences(prompts: Path, tmp_path: Path) -> None:
-    from plms.models import GenerationResult
+    from protlms.models import GenerationResult
 
     model = _load(capabilities=["embed", "likelihood", "generate"])
     result = model.generate(prompts, num_samples=2, output_dir=tmp_path / "gen")
@@ -439,7 +439,7 @@ def _registry_with_digest() -> Registry:
         [
             ModelEntry(
                 name="esm2-8m",
-                image="ghcr.io/briney/plms-esm2:t6_8M",
+                image="ghcr.io/briney/protlms-esm2:t6_8M",
                 digest="sha256:abc123",
                 model_family="esm2",
             )
@@ -456,13 +456,13 @@ def test_load_skips_pull_when_image_present() -> None:
 def test_load_pulls_pinned_ref_when_absent() -> None:
     runner = FakeRunner(_manifest_json(), present=False)
     load("esm2-8m", runner=runner, registry=_registry_with_digest())
-    assert runner.pulled == ["ghcr.io/briney/plms-esm2@sha256:abc123"]
+    assert runner.pulled == ["ghcr.io/briney/protlms-esm2@sha256:abc123"]
 
 
 def test_load_runs_manifest_against_pinned_ref() -> None:
     runner = FakeRunner(_manifest_json(), present=True)
     load("esm2-8m", runner=runner, registry=_registry_with_digest())
-    assert runner.manifest_ref == "ghcr.io/briney/plms-esm2@sha256:abc123"
+    assert runner.manifest_ref == "ghcr.io/briney/protlms-esm2@sha256:abc123"
 
 
 def test_load_allow_pull_false_raises_when_absent() -> None:
@@ -472,7 +472,7 @@ def test_load_allow_pull_false_raises_when_absent() -> None:
 
 
 def test_load_env_no_pull_disables_pull(monkeypatch) -> None:
-    monkeypatch.setenv("PLMS_NO_PULL", "1")
+    monkeypatch.setenv("PROTLMS_NO_PULL", "1")
     runner = FakeRunner(_manifest_json(), present=False)
     with pytest.raises(ImageNotFoundError):
         load("esm2-8m", runner=runner)

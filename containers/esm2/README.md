@@ -1,7 +1,7 @@
 # ESM2 container
 
 A contract-compliant Docker image wrapping the [ESM2](https://huggingface.co/facebook/esm2_t6_8M_UR50D)
-masked protein language model. It implements the plms container contract
+masked protein language model. It implements the protlms container contract
 (see [`../../docs/CONTRACT.md`](../../docs/CONTRACT.md)) using HuggingFace
 `transformers`, and exposes the `manifest`, `embed`, and `likelihood`
 subcommands.
@@ -13,10 +13,10 @@ its weights are baked into the image, so runtime requires no network access.
 
 ```bash
 # tiny demo / CI model (fast to build, ~8M params)
-docker build --build-arg ESM2_CHECKPOINT=esm2_t6_8M -t plms-esm2:t6_8M containers/esm2
+docker build --build-arg ESM2_CHECKPOINT=esm2_t6_8M -t protlms-esm2:t6_8M containers/esm2
 
 # standard workhorse (~650M params)
-docker build --build-arg ESM2_CHECKPOINT=esm2_t33_650M -t plms-esm2:t33_650M containers/esm2
+docker build --build-arg ESM2_CHECKPOINT=esm2_t33_650M -t protlms-esm2:t33_650M containers/esm2
 ```
 
 `ESM2_CHECKPOINT` accepts a short ESM2 name (`esm2_t6_8M`, `esm2_t33_650M`, …),
@@ -26,19 +26,19 @@ which is resolved to `facebook/<name>_UR50D`, or a full HuggingFace id.
 
 ```bash
 # introspect the manifest (no mounts needed)
-docker run --rm plms-esm2:t6_8M manifest
+docker run --rm protlms-esm2:t6_8M manifest
 
 # embed sequences (CPU)
 docker run --rm -v "$PWD/in:/in:ro" -v "$PWD/out:/out:rw" \
-  plms-esm2:t6_8M embed --input /in/seqs.fasta --output /out --pooling mean
+  protlms-esm2:t6_8M embed --input /in/seqs.fasta --output /out --pooling mean
 
 # on GPU
 docker run --rm --gpus all -v "$PWD/in:/in:ro" -v "$PWD/out:/out:rw" \
-  plms-esm2:t6_8M likelihood --input /in/seqs.fasta --output /out
+  protlms-esm2:t6_8M likelihood --input /in/seqs.fasta --output /out
 ```
 
-Normally you do not run these by hand — the `plms` client builds these commands
-for you (`plms embed esm2-8m seqs.fasta -o out/`).
+Normally you do not run these by hand — the `protlms` client builds these commands
+for you (`protlms embed esm2-8m seqs.fasta -o out/`).
 
 ## Models
 

@@ -9,13 +9,13 @@ from pathlib import Path
 
 import pytest
 
-from plms.exceptions import ImageNotFoundError, ImagePullError, RunnerError
-from plms.runner import RunSpec, SubprocessDockerRunner, build_argv, ensure_image
+from protlms.exceptions import ImageNotFoundError, ImagePullError, RunnerError
+from protlms.runner import RunSpec, SubprocessDockerRunner, build_argv, ensure_image
 
 
 def _spec(tmp_path: Path, **overrides) -> RunSpec:
     defaults = dict(
-        image="plms-esm2:t6_8M",
+        image="protlms-esm2:t6_8M",
         command=["embed", "--input", "/in/seqs.fasta", "--output", "/out"],
         input_dir=tmp_path / "in",
         output_dir=tmp_path / "out",
@@ -31,7 +31,7 @@ def test_build_argv_cpu(tmp_path: Path) -> None:
     assert f"{tmp_path / 'in'}:/in:ro" in argv
     assert f"{tmp_path / 'out'}:/out:rw" in argv
     # command comes after the image
-    assert argv[argv.index("plms-esm2:t6_8M") + 1 :] == [
+    assert argv[argv.index("protlms-esm2:t6_8M") + 1 :] == [
         "embed",
         "--input",
         "/in/seqs.fasta",
@@ -116,7 +116,7 @@ def test_run_logs_argv(tmp_path: Path, monkeypatch, caplog) -> None:
         return subprocess.CompletedProcess(argv, returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    with caplog.at_level(logging.INFO, logger="plms.runner"):
+    with caplog.at_level(logging.INFO, logger="protlms.runner"):
         SubprocessDockerRunner().run(_spec(tmp_path))
     assert any("docker" in rec.getMessage() for rec in caplog.records)
 
@@ -129,9 +129,9 @@ def test_manifest_runs_manifest_subcommand(tmp_path: Path, monkeypatch) -> None:
         return subprocess.CompletedProcess(argv, returncode=0, stdout='{"x": 1}', stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    out = SubprocessDockerRunner().manifest("plms-esm2:t6_8M")
+    out = SubprocessDockerRunner().manifest("protlms-esm2:t6_8M")
     assert out == '{"x": 1}'
-    assert captured["argv"] == ["docker", "run", "--rm", "plms-esm2:t6_8M", "manifest"]
+    assert captured["argv"] == ["docker", "run", "--rm", "protlms-esm2:t6_8M", "manifest"]
 
 
 def test_manifest_nonzero_exit_raises_image_not_found(tmp_path: Path, monkeypatch) -> None:
@@ -142,7 +142,7 @@ def test_manifest_nonzero_exit_raises_image_not_found(tmp_path: Path, monkeypatc
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     with pytest.raises(ImageNotFoundError):
-        SubprocessDockerRunner().manifest("plms-esm2:missing")
+        SubprocessDockerRunner().manifest("protlms-esm2:missing")
 
 
 def test_image_present_true_on_zero_exit(monkeypatch) -> None:
@@ -170,8 +170,8 @@ def test_pull_success_invokes_docker_pull(monkeypatch) -> None:
         return subprocess.CompletedProcess(argv, returncode=0, stdout="pulled", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    SubprocessDockerRunner().pull("ghcr.io/briney/plms-esm2@sha256:abc")
-    assert captured["argv"] == ["docker", "pull", "ghcr.io/briney/plms-esm2@sha256:abc"]
+    SubprocessDockerRunner().pull("ghcr.io/briney/protlms-esm2@sha256:abc")
+    assert captured["argv"] == ["docker", "pull", "ghcr.io/briney/protlms-esm2@sha256:abc"]
 
 
 def test_pull_nonzero_raises_image_pull_error(monkeypatch) -> None:
@@ -227,7 +227,7 @@ def test_ensure_image_pulls_when_absent_and_allowed() -> None:
 
 def test_ensure_image_raises_when_absent_and_pull_disabled() -> None:
     runner = _RecordingRunner(present=False)
-    with pytest.raises(ImageNotFoundError, match="plms pull m"):
+    with pytest.raises(ImageNotFoundError, match="protlms pull m"):
         ensure_image(runner, "img@sha256:abc", allow_pull=False, model_name="m")
 
 
