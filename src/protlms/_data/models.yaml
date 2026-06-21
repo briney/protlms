@@ -51,3 +51,24 @@ models:
     build:
       context: containers/protbert
       args: { PROTBERT_CHECKPOINT: prot_bert_bfd }
+  - name: e1-150m
+    aliases: [E1-150m]
+    image: ghcr.io/briney/protlms-e1:150m
+    model_family: e1
+    build:
+      context: containers/e1
+      args: { E1_CHECKPOINT: E1-150m }
+  - name: e1-300m
+    aliases: [E1-300m]
+    image: ghcr.io/briney/protlms-e1:300m
+    model_family: e1
+    build:
+      context: containers/e1
+      args: { E1_CHECKPOINT: E1-300m }
+  - name: e1-600m
+    aliases: [E1-600m]
+    image: ghcr.io/briney/protlms-e1:600m
+    model_family: e1
+    build:
+      context: containers/e1
+      args: { E1_CHECKPOINT: E1-600m }
