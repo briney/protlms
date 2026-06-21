@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "321078247d3c",
+  "strategy": "manual-commit",
+  "branch": "feature/protbert-e1-encoders",
+  "checkpoints_count": 10,
+  "files_touched": [
+    "tests/test_integration_protbert.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/32/1078247d3c/0/metadata.json",
+      "transcript": "/32/1078247d3c/0/full.jsonl",
+      "content_hash": "/32/1078247d3c/0/content_hash.txt",
+      "prompt": "/32/1078247d3c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 573,
+    "cache_creation_tokens": 253953,
+    "cache_read_tokens": 6620828,
+    "output_tokens": 31344,
+    "api_call_count": 29
+  }
+}

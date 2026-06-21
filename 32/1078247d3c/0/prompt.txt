@@ -1,0 +1,421 @@
+subagent-driven
+
+---
+
+<task-notification>
+<task-id>a2ca54c833f059a3b</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-protlms/e137f537-7644-42e8-9e19-f696934a2817/tasks/a2ca54c833f059a3b.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 1: ProtBERT registry" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Excellent! Everything is complete. Here's my final report:
+
+---
+
+**Status:** DONE
+
+**Commit created:** 
+- `0b80996 registry: add protbert + protbert-bfd entries`
+
+**Test summary:** 
+- All tests pass: 173 passed, 19 skipped (full suite); 13 passed (registry tests); new test `test_resolve_protbert` validates both protbert and protbert-bfd entries with correct image refs and aliases
+
+**Concerns:** None
+
+**Report file:** `/home/briney/git/protlms/.superpowers/sdd/task-1-report.md`</result>
+<usage><subagent_tokens>34173</subagent_tokens><tool_uses>23</tool_uses><duration_ms>79171</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a09569fdb100604a3</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-protlms/e137f537-7644-42e8-9e19-f696934a2817/tasks/a09569fdb100604a3.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 1 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>### Spec Compliance
+- ✅ Spec compliant
+
+Every requirement from the brief is satisfied:
+
+| Requirement | Status |
+|---|---|
+| Two entries appended to `models.yaml` | ✅ diff lines 27–40 |
+| `protbert` → `ghcr.io/briney/protlms-protbert:uniref100` | ✅ |
+| `protbert-bfd` → `ghcr.io/briney/protlms-protbert:bfd` | ✅ |
+| alias `prot_bert` / `prot_bert_bfd` | ✅ |
+| `model_family: protbert` on both | ✅ |
+| `build.context: containers/protbert` on both | ✅ |
+| `build.args: { PROTBERT_CHECKPOINT: prot_bert }` / `prot_bert_bfd` | ✅ |
+| Test function `test_resolve_protbert` with exact assertions from brief | ✅ |
+| No production source changes (only `_data/models.yaml` + tests) | ✅ |
+| Commit message matches spec (`registry: add protbert + protbert-bfd entries`) | ✅ |
+
+⚠️ Cannot verify from diff: That the failing-test step (Step 2) was actually run before adding the YAML — the commit is a single squashed commit so TDD order is unverifiable from the diff. The report claims it was done; nothing contradicts it.
+
+---
+
+### Strengths
+
+- YAML indentation is consistent with sibling entries throughout (2-space with inline `args` brace notation).
+- The test is a real integration test against `Registry.load()`, not a mock — it exercises the actual YAML parsing path and validates names, aliases, images, and `model_family` in one tight function, matching the brief's exact assertion list verbatim.
+- The two entries are correctly ordered relative to each other and appended after the last existing entry (`esm-c-600m`), keeping the file tidy.
+- Only two files touched; no scope creep.
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+None.
+
+#### Minor (Nice to Have)
+None.
+
+---
+
+### Assessment
+**Task quality:** Approved
+
+**Reasoning:** The implementation is a byte-for-byte match against the spec — correct image refs, aliases, `model_family`, `build` blocks, and test assertions — with no stray changes, no scope creep, and YAML shape that is consistent with existing entries.</result>
+<usage><subagent_tokens>20860</subagent_tokens><tool_uses>3</tool_uses><duration_ms>18605</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a1fdc94a4024cae11</task-id>
+<tool-use-id>toolu_016UYuAhoxyVZ1YHe5fduTPt</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-protlms/e137f537-7644-42e8-9e19-f696934a2817/tasks/a1fdc94a4024cae11.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 2: ProtBERT entrypoint" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Excellent! All complete. Let me generate the final summary:
+
+---
+
+## Status: DONE
+
+**Commits Created:**
+- `cb2cba8` — protbert: contract entrypoint (manifest/embed/likelihood/score) + helper tests
+
+**Test Summary:**
+- 12/12 passing (test_protbert_entrypoint.py), 0.01s runtime, pristine output
+
+**Work Completed:**
+1. Created `tests/test_protbert_entrypoint.py` (89 lines, 12 test cases)
+2. Verified RED: FileNotFoundError on missing entrypoint module
+3. Created `containers/protbert/entrypoint.py` (628 lines) with exact content from brief
+4. Verified GREEN: All 12 tests pass without torch/transformers
+5. Formatted with ruff (no changes needed), linting passed
+6. Committed both files
+
+**Self-Review Findings:**
+- Preprocess shim (UZOB→X + space-join) applied at all 4 tokenization sites (_embed_one, _pseudo_log_likelihood, _masked_position_logprobs, _wt_position_logprobs)
+- Configuration verified: MAX_SEQUENCE_LENGTH=1024, do_lower_case=False, model_family="protbert", Rostlab/ id mapping
+- Tests exercise all pure helpers without ML imports (lazy loading deferred to function scope)
+- Code quality: formatted, linted, no warnings
+
+**Concerns:** None
+
+**Report:** /home/briney/git/protlms/.superpowers/sdd/task-2-report.md</result>
+<usage><subagent_tokens>42493</subagent_tokens><tool_uses>16</tool_uses><duration_ms>102218</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a29ae2e0a9f50d6ff</task-id>
+<tool-use-id>toolu_01Pmcddhw1BLebUk323XPmba</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-protlms/e137f537-7644-42e8-9e19-f696934a2817/tasks/a29ae2e0a9f50d6ff.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 2 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I now have a complete picture. Let me analyze the diff carefully against the brief and constraints.
+
+### Spec Compliance
+
+**preprocess at all four tokenization sites:**
+- `_embed_one` (diff line 281): `tokenizer(preprocess(seq), ...)` — ✅
+- `_pseudo_log_likelihood` (diff line 316): `tokenizer(preprocess(seq), ...)` — ✅
+- `_masked_position_logprobs` (diff line 347): `tokenizer(preprocess(seq), ...)` — ✅
+- `_wt_position_logprobs` (diff line 367): `tokenizer(preprocess(seq), ...)` — ✅
+
+**residue slice uses raw sequence length:** diff line 286: `hidden[1 : 1 + len(seq)]` — `seq` is the raw (un-spaced) sequence passed into `_embed_one`. ✅
+
+**`resolve_hf_id` maps to `Rostlab/`:** diff lines 60–62. ✅
+
+**Checkpoint strings:** `prot_bert` / `prot_bert_bfd` tested; `/` check for passthrough. ✅
+
+**Default checkpoint `prot_bert` via env `PROTBERT_CHECKPOINT`:** diff line 44. ✅
+
+**`MAX_SEQUENCE_LENGTH = 1024`, `default_batch_size = 8`, `min_gpu_memory_gb = null`:** diff lines 42–43, manifest lines 210–213. ✅
+
+**manifest dims from `AutoConfig` (hidden_size / num_hidden_layers):** diff lines 208–211. ✅
+
+**`model_family = "protbert"`:** diff line 206. ✅
+
+**Capabilities: embed, likelihood, score (NO generate):** diff line 207. No `generate` subcommand in parser. ✅
+
+**`CONTRACT_VERSION = "0.3"`:** diff line 41. ✅
+
+**`do_lower_case=False` on tokenizer:** diff line 190 (`load_model`), diff line 338 (`cmd_prefetch`). ✅
+
+**Mask token `[MASK]`:** not explicitly referenced by string literal in the entrypoint — uses `tokenizer.mask_token_id` which is the correct programmatic reference and will resolve to `[MASK]` for ProtBERT. ✅
+
+**Truncation measured on raw sequence:** `_truncate` receives and checks `len(seq)` where `seq` is the raw (unprocessed) sequence in all call sites. ✅
+
+**Pure helpers duplicated per container (plan-mandated pattern):** ✅ present and expected.
+
+**No `generate` subcommand:** confirmed — parser only registers manifest, embed, likelihood, score, _prefetch. ✅
+
+**Brief says 629 lines; diff shows 518 lines (after ruff format collapsed some):** The brief's intended code and the shipped code are functionally identical — ruff format compressed some multi-line constructs; no logic was removed. Content match confirmed by walking every function.
+
+**One divergence from the brief found:** The brief's `_embed_one` passes `preprocess(seq)` as a positional string to the tokenizer, but the diff implementation is identical. No actual divergence.
+
+⚠️ Cannot verify from diff: Whether `PROTBERT_CHECKPOINT` env var is actually read correctly at module load time if the variable is set after import (this is a design property of `os.environ.get` at module level — it reads the env at import time, not at call time). This is the same pattern as the brief specifies and is acceptable for a container entrypoint where env vars are set before the process starts.
+
+---
+
+### Spec Compliance
+✅ **Spec compliant** — all required items verified against the diff.
+
+⚠️ Cannot verify from diff: Integration behavior of layer indexing with negative layer values (e.g., `--layers -1`). `int(args.layers.split(",")[0])` on `"-1"` yields `-1`, which is a valid Python list index (`hidden_states[-1]`). This is correct behavior but untested at the unit level.
+
+---
+
+### Strengths
+
+- The pure-helper / lazy-import split is executed cleanly: every `torch`/`transformers` import is inside a function body, keeping the module importable without the ML stack. The 0.01s test time confirms this.
+- `preprocess` is exactly the spec formula (`re.sub(r"[UZOB]", "X", seq.upper())` then space-join), applied consistently at all four tokenization sites with no omissions.
+- `_embed_one` correctly uses `hidden[1 : 1 + len(seq)]` where `len(seq)` is measured on the raw sequence — the critical correctness requirement for per-residue alignment.
+- The test file is a faithful transcription of the brief's test code; it loads the entrypoint by path without touching the package import system, enabling torch-free CI runs.
+- `_masked_position_logprobs` and `_wt_position_logprobs` implement the wt-marginal / masked-marginal duality correctly using raw logits (not embeddings) — matches esm2 approach as specified.
+- Structured error emission (`emit_error_and_exit`) is consistent and used at all error boundaries including device unavailability.
+- `sanitize_ids` deduplication logic matches the test expectation exactly (`a_b`, `a_b__1` for two colliding ids).
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+
+**`_embed_one`: `torch.autocast` will warn/fail on CPU** (`containers/protbert/entrypoint.py`, diff line 283)
+```python
+with torch.no_grad(), torch.autocast(device_type="cuda", enabled=use_amp):
+```
+When `device == "cpu"`, `use_amp` is `False` so `enabled=False` suppresses the autocast body — but `device_type="cuda"` is still passed. On some PyTorch versions this raises a warning or error even when `enabled=False` because `device_type="cuda"` is validated independently of `enabled`. The safe form is `device_type=device` (or conditionally omit the context manager). This is copied verbatim from the brief, so it is a brief-level issue, but worth flagging since it will surface in CPU-only integration runs.
+
+**`_score_variant`: WT residue mismatch check uses raw `wt_seq` characters, but scoring uses `tokenizer.convert_tokens_to_ids(wt_aa)` which may not round-trip through preprocessing** (`containers/protbert/entrypoint.py`, diff line 384–388)
+The WT residue check (`wt_seq[pos - 1] != wt_aa`) compares against the raw sequence (which may contain UZOB). If the WT sequence has a rare residue at position `pos`, the raw check passes but `convert_tokens_to_ids("U")` may return `[UNK]` rather than `X`'s token id, producing a silently wrong score. The fix is to preprocess-then-decode the WT sequence for comparison, or document that `wt_sequence` inputs must already be canonical. This is also present in the brief verbatim — flag for Task 4 awareness.
+
+#### Minor (Nice to Have)
+
+**`perplexity_from_mean` imports `math` inside the function** (`containers/protbert/entrypoint.py`, diff line 113). `math` is stdlib and always available; there is no reason to defer it. The deferred-import pattern is reserved for `torch`/`transformers` in this file. A module-level `import math` would be cleaner. (Copied from brief, so low priority.)
+
+**`_wt_position_logprobs` ignores the `positions` argument for indexing** (diff line 370–371): it runs one full forward pass and returns `log_probs[pos]` for each `pos` in `positions`. This is correct and efficient — one pass for all positions — but the returned tensor slice `log_probs[pos]` uses the raw 1-indexed position into the (T, V) logits array. Since position 0 is `[CLS]` and position 1 is the first residue (1-indexed positions align with token positions), this is correct as written. However, it is not explicitly documented, making it easy to misread. A comment would help maintainability.
+
+**Test file: `_load()` is called at module level** (`tests/test_protbert_entrypoint.py`, line 562 in diff). If the entrypoint file is missing, the entire test module fails to collect rather than individual tests failing. This matches the brief's design exactly and is intentional, but it means a missing file produces a confusing collection error rather than a clear test failure. The brief's rationale (fail-fast at RED stage) makes this acceptable.
+
+---
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** The implementation is a faithful, complete transcription of the brief with all spec constraints satisfied — correct `preprocess` at all four tokenization sites, right residue slice, correct manifest fields, no `generate` subcommand, lazy ML imports throughout, and 12/12 tests passing without torch. The two Important findings are both pre-existing in the brief itself and are integration-level concerns better caught by Task 4's Docker test rather than blockers here.</result>
+<usage><subagent_tokens>38058</subagent_tokens><tool_uses>3</tool_uses><duration_ms>56997</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a0df89363c0825ab7</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-protlms/e137f537-7644-42e8-9e19-f696934a2817/tasks/a0df89363c0825ab7.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 3: ProtBERT Dockerfile" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>---
+
+**Status:** DONE
+
+**Commits created:** `7b1d438` — protbert: Dockerfile (pytorch base, transformers, baked weights) + README
+
+**Build + manifest:** Build succeeded in ~5m38s; `_prefetch` layer printed `prefetched Rostlab/prot_bert`. Manifest smoke test returned valid JSON with all required fields: `model_family=protbert`, `name=prot_bert`, `embedding_dim=1024`, `num_layers=30`, `capabilities=[embed,likelihood,score]`, `contract_version=0.3`.
+
+**Concerns:** None. Two expected HuggingFace warnings appeared during the prefetch step (BertForMaskedLM generative capabilities note; unused pooler weights) — both are benign and standard for this model.
+
+**Report:** `/home/briney/git/protlms/.superpowers/sdd/task-3-report.md`</result>
+<usage><subagent_tokens>39632</subagent_tokens><tool_uses>16</tool_uses><duration_ms>473732</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ac346177d9b8bce2a</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-protlms/e137f537-7644-42e8-9e19-f696934a2817/tasks/ac346177d9b8bce2a.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 3 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>### Spec Compliance
+
+- ✅ Spec compliant overall, with one corrected-wording verification and one minor tag-convention note
+
+Checking the corrected tokenization bullet directly: README.md lines 104–110 in the diff read:
+
+&gt; One nuance for `score`: a wild-type residue that is U/Z/O/B still matches the raw input (the WT-residue check passes), but because the model context is X-substituted, scores at or near such rare residues are approximate. This is uncommon — standard sequences are unaffected.
+
+The inaccurate "will fail the WT-residue check" language from the brief is absent. The corrected wording is present and accurate. ✅
+
+Checking against every spec requirement:
+
+| Requirement | Status |
+|---|---|
+| Base image `pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime` | ✅ Dockerfile:9 |
+| `transformers==4.46.3` | ✅ Dockerfile:17 |
+| `PROTBERT_CHECKPOINT` build arg, default `prot_bert` | ✅ Dockerfile:12 |
+| `HF_HOME=/opt/hf-cache` | ✅ Dockerfile:13 |
+| Weights baked via `_prefetch` before `HF_HUB_OFFLINE=1` | ✅ Dockerfile:23 then 26 |
+| `HF_HUB_OFFLINE=1` set AFTER prefetch | ✅ Dockerfile:26 |
+| `ENTRYPOINT ["python", "/app/entrypoint.py"]` | ✅ Dockerfile:28 |
+| README documents both checkpoints, dims (1024/30/~420M) | ✅ README Models table |
+| README documents tokenization preprocessing | ✅ Notes bullet 1 |
+| README documents masked-marginal O(L) likelihood | ✅ Notes bullet 2 |
+| README documents max_sequence_length 1024 | ✅ Notes bullet 4 |
+| README documents CPU/GPU behavior | ✅ Notes bullet 5 |
+| Corrected tokenization wording (not "will fail the check") | ✅ README:104-110 |
+
+⚠️ Cannot verify from diff: The README build/run examples use short tags (`protlms-protbert:uniref100`) rather than the fully-qualified `ghcr.io/briney/protlms-protbert:uniref100` tag convention specified in the brief. The Dockerfile header comments also use the short-tag form. This is a documentation-only discrepancy — the image itself is tagged correctly per the implementer's build command — but users copy-pasting from the README would use unqualified local tags. Cannot verify the actual built image tag from the diff alone.
+
+⚠️ Cannot verify from diff: Build evidence (prefetch success, manifest JSON) is the implementer's self-reported claim and cannot be independently confirmed without re-running the build.
+
+---
+
+### Strengths
+
+- The Dockerfile layer ordering is exactly correct: `pip install` → `COPY entrypoint.py` → `RUN _prefetch` → `ENV HF_HUB_OFFLINE=1`. This is the critical sequencing — network is available during prefetch, offline is enforced only at runtime. No deviation from the spec.
+- The corrected tokenization bullet is well-written and technically precise. It correctly distinguishes that the raw-input WT-residue check passes (comparison is against the original FASTA), while noting that model-context X-substitution makes scores near rare residues approximate. This is more accurate and more useful than both the brief's original inaccurate text and a naive "fixed" version.
+- `PYTHONUNBUFFERED=1` is a sensible addition not in the spec — good operational practice for container log visibility.
+- The `--no-cache-dir` flag on pip avoids layer bloat. Good.
+- The manifest smoke test result matches all specified fields exactly.
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+
+None.
+
+#### Important (Should Fix)
+
+**README tag examples omit `ghcr.io/briney/` prefix** (README.md lines 70–73, 83–89 in the diff). The brief specifies the convention `ghcr.io/briney/protlms-protbert:uniref100` and `:bfd`. The Building section and Running section both show bare `protlms-protbert:uniref100` — no registry prefix. A user following the README to build or run would produce a local tag that doesn't match what gets pushed to GHCR. The Dockerfile header comments (Dockerfile lines 2–4) also use the bare form. This is a docs-only issue that doesn't affect the image itself, but docs inconsistent with the tag convention are a real maintenance hazard.
+
+#### Minor (Nice to Have)
+
+- The Dockerfile has no trailing newline on line 28 — Docker doesn't care, but it's a minor style nit for a file that will be diff'd.
+- The `BASE_IMAGE` ARG before `FROM` is a nice pattern (allows overriding the base at build time), but it's not in the brief. Not a problem — it's strictly additive and doesn't conflict with anything — just worth noting it's an undocumented extension.
+
+---
+
+### Assessment
+
+**Task quality:** Approved (with important fix recommended)
+
+**Reasoning:** The implementation is spec-correct and production-quality — the corrected tokenization wording is accurate and well-stated, Dockerfile layer ordering is exactly right for the offline-bake pattern, and the manifest matches spec. The one important issue (README tag examples missing `ghcr.io/briney/` prefix) is a docs-only inconsistency with the specified tag convention, easily fixed in a follow-up without touching the Dockerfile or rebuild.</result>
+<usage><subagent_tokens>22711</subagent_tokens><tool_uses>3</tool_uses><duration_ms>35554</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>abe6f3cb9e603983d</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-protlms/e137f537-7644-42e8-9e19-f696934a2817/tasks/abe6f3cb9e603983d.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 4: ProtBERT integration" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Status:** DONE
+
+**Commit created:** `850741e` — `test: end-to-end ProtBERT integration (embed/likelihood/score)`
+
+**Gated integration result:** 5/5 slow tests PASS against `ghcr.io/briney/protlms-protbert:uniref100` in 14.24s (image was already present, no rebuild needed). Proves ProtBERT preprocess shim, [CLS]/[SEP] slicing, masked-marginal PLL, and scoring end-to-end.
+
+**Concerns:** None. Pre-existing `ty check` warning in `chunking.py` (unused `ty: ignore` directive) was not introduced by this task.
+
+**Report:** `/home/briney/git/protlms/.superpowers/sdd/task-4-report.md`</result>
+<usage><subagent_tokens>34282</subagent_tokens><tool_uses>25</tool_uses><duration_ms>145765</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ab62f707f887007e7</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-protlms/e137f537-7644-42e8-9e19-f696934a2817/tasks/ab62f707f887007e7.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 4 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I have everything I need. Here is the review.
+
+---
+
+### Spec Compliance
+
+- ✅ Spec compliant — all required elements are present and correct.
+- ⚠️ Cannot verify from diff: actual test execution results (5/5 pass claimed by report); verified as unverified claims per instructions.
+
+---
+
+### Strengths
+
+**Exact spec adherence.** The diff matches the brief's code block verbatim. Every required constant is correct: `IMAGE = "ghcr.io/briney/protlms-protbert:uniref100"`, `EMBEDDING_DIM = 1024`, manifest name assertion `"prot_bert"`, data files `tiny.fasta`/`variants.csv`, and `EXPECTED_IDS`.
+
+**Gating is correctly structured.** `pytestmark` uses the same two-condition `skipif` as ESM2/ESM-C — `PROTLMS_RUN_DOCKER_TESTS != "1" or not _docker_available()` — so tests are skipped by default with zero env-var setup. `pytest.mark.slow` is present. The report confirms 5 tests skip cleanly without the env var.
+
+**Session fixture avoids unnecessary rebuilds.** `protbert_image` does `docker image inspect` first and only runs `docker build` if the image is absent. This is the right pattern for a CI environment where the image is pre-built.
+
+**Assertions are meaningful invariants.** `rows["self"]["score"] == pytest.approx(0.0, abs=1e-5)` is a genuine mathematical invariant (self-substitution PLL delta = 0), not a snapshot. Per-residue shape `(26, EMBEDDING_DIM)` pins the [CLS]/[SEP] stripping logic. `perplexity &gt; 1.0` catches degenerate outputs.
+
+**`score` capability coverage adds value beyond ESM2 reference.** The ESM2 test has a separate `test_score_wt_marginal_runs` and `test_manifest_now_declares_score`; the ProtBERT test folds score capability verification into `test_manifest_is_read_through_client` (asserting `"score" in capabilities`) and covers `masked-marginal` scoring directly.
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+
+None.
+
+#### Important (Should Fix)
+
+**`model` fixture omits `allow_pull=False`** (`tests/test_integration_protbert.py:85`).
+
+The ESM2 reference fixture calls `protlms.load("esm2-8m", allow_pull=False)` (esm2 test line 69). The ProtBERT fixture calls `protlms.load("protbert")` without the flag. If the registry supports `allow_pull` and the image is not present locally, the client could silently attempt a network pull rather than failing fast on the pre-built image. The session fixture already ensures the image is present before `model` is requested, so this is unlikely to cause a test failure in practice — but it is an asymmetry with the ESM2 pattern that could matter in a CI environment where the GHCR image exists but a local build does not, or vice versa.
+
+#### Minor (Nice to Have)
+
+**No `test_score_wt_marginal_runs` coverage.** The ESM2 test (lines 119-125) verifies that `wt-marginal` scoring also works. The brief does not require it for ProtBERT, so this is not a compliance gap — but if ProtBERT's container supports wt-marginal (as implied by exposing the `score` capability), a second scoring method test would strengthen confidence. This is explicitly out of scope for Task 4 per the brief, so flag as nice-to-have only.
+
+**`n_mutations` for `self` variant is a questionable assertion name.** `rows["self"]["n_mutations"] == 1` is correct for the `M1M` variant (one substitution position listed, even though it's WT→WT), but the comment in the ESM2 test (line 112: `# a self-substitution must score exactly 0`) clarifies intent that is absent in the ProtBERT test. Not a bug, but a comment would aid future readers who might wonder why a "self" variant has `n_mutations == 1`.
+
+---
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** The implementation is a verbatim transcription of the spec with all constants, gating logic, fixture structure, and assertions correct — the single meaningful gap (missing `allow_pull=False` on the model fixture) is unlikely to cause failures given the image-check guard in the session fixture, but should be aligned with the ESM2 reference pattern for consistency.</result>
+<usage><subagent_tokens>25745</subagent_tokens><tool_uses>5</tool_uses><duration_ms>33559</duration_ms></usage>
+</task-notification>
