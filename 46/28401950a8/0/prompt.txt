@@ -1,0 +1,1015 @@
+<task-notification>
+<task-id>a34bc7fb82e62d5f8</task-id>
+<tool-use-id>toolu_016bTwRRrBMaLs6mot1CG4np</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a34bc7fb82e62d5f8.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 1: registry schema" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Perfect! Everything looks great. Let me create a final comprehensive summary:
+
+---
+
+## Status: DONE
+
+**Commit Created:**
+- a8610e2 `registry: add digest + build fields and pinned_ref()`
+
+**Test Summary:**
+- 12/12 tests pass (7 pre-existing + 5 new)
+- All new tests validate digest pinning, tag stripping, validation, and BuildSpec deserialization
+
+**Lint/Type Check:**
+- Ruff: All checks passed
+- Format: 2 files already formatted
+- Type check: Clean for modified files
+
+**Report File:**
+/home/briney/git/plms/.superpowers/sdd/task-1-report.md
+
+**No Concerns** — Implementation matches brief exactly, all code properly tested, linted, and type-checked.</result>
+<usage><subagent_tokens>40250</subagent_tokens><tool_uses>33</tool_uses><duration_ms>136169</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>afe1c6b725974b19b</task-id>
+<tool-use-id>toolu_01EPPY5putpFprTdcb1Y1VxN</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/afe1c6b725974b19b.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 1 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The diff is complete and self-contained. Let me analyze it carefully against the spec.
+
+**Key things to check:**
+
+1. `_strip_tag` logic for the `host:5000/repo:tag` case — the spec says "with the `:tag` stripped from the final path segment only, so a registry host:port is preserved"
+2. The `_entry` helper function is missing a return type annotation
+3. `args: dict[str, str] = {}` — mutable default in Pydantic (need to check if this is safe in Pydantic v2)
+4. Whether `pytest` import is already available in the test file (it is, confirmed in the diff context)
+5. Whether `field_validator` needs `mode="before"` or any other config
+
+Let me trace through `_strip_tag("host:5000/repo:tag")`:
+- `image.rpartition("/")` → `prefix="host:5000"`, `sep="/"`, `last="repo:tag"`
+- `last.split(":", 1)[0]` → `name="repo"`
+- `f"{prefix}{sep}{name}"` → `"host:5000/repo"` ✅
+
+And `_strip_tag("ghcr.io/briney/plms-esm2:t6_8M")`:
+- `image.rpartition("/")` → `prefix="ghcr.io/briney"`, `sep="/"`, `last="plms-esm2:t6_8M"`
+- `name="plms-esm2"`
+- result: `"ghcr.io/briney/plms-esm2"` ✅
+
+And for an image with no `/` at all like `"myimage:tag"`:
+- `image.rpartition("/")` → `prefix=""`, `sep=""`, `last="myimage:tag"`
+- `name="myimage"`
+- `if sep` is falsy, returns just `name` = `"myimage"` ✅
+
+Now check: Pydantic v2 and mutable default `args: dict[str, str] = {}`. In Pydantic v2, field defaults are handled safely via `default_factory` internally, so `= {}` is fine for `dict` fields — Pydantic copies it per instance. This is not the same as Python dataclass mutable default issue.
+
+Also check: `field_validator` on `digest` with `str | None`. In Pydantic v2, `field_validator` by default runs only when the value is provided (not `None` by default). Actually, let me think: with `str | None = None`, if someone passes `digest=None` explicitly, the validator runs with `None`. The validator handles `None` correctly. If digest is not provided, it defaults to `None` and the validator... actually in Pydantic v2, validators run on default values too depending on the configuration. The implementation handles `None` with `if value is not None`, so it's safe either way.
+
+One concern: `_entry` helper in tests has no return type annotation. The global constraint says "Type hints on all function signatures." However, the brief's own test code also has no return type annotation on `_entry`. Since the brief mandates the exact code, this is a minor style issue — not a blocker.
+
+Now checking: Does `test_invalid_digest_rejected` properly wrap the Pydantic `ValidationError`? In Pydantic v2, `field_validator` raises `ValueError` internally but the actual exception raised is `pydantic.ValidationError`. The test uses `pytest.raises(ValueError, match="sha256:")` but Pydantic v2 wraps the `ValueError` in a `ValidationError`. This would cause the test to FAIL because `pydantic.ValidationError` is not a `ValueError`.
+
+Wait — let me reconsider. The report says all 12 tests pass. But the spec for the test says `pytest.raises(ValueError, match="sha256:")`. In Pydantic v2, `ValidationError` is NOT a subclass of `ValueError`. This is a potential issue.
+
+Actually, `pydantic.ValidationError` does inherit from... let me think carefully. In Pydantic v2, `ValidationError` inherits from `ValueError`? No, it inherits from `PydanticUserError`... actually `ValidationError` in Pydantic v2 inherits from `Exception` directly, not `ValueError`. But the report says tests pass. So either: (a) Pydantic v2 changed this, (b) the test was wrong and somehow still passes, or (c) I'm wrong about the inheritance chain.
+
+Actually, I need to double-check: in Pydantic v2, `ValidationError` is a separate exception class. But `pytest.raises(ValueError)` would NOT catch `ValidationError`. If the tests actually pass, then either Pydantic wraps it differently, or... The brief itself specifies `pytest.raises(ValueError)` — if this passes, it might be that Pydantic v2 actually does wrap in ValidationError which IS a ValueError... I'm uncertain here.
+
+Let me check if there's something in the diff I can use — the existing test suite uses `pytest.raises(ModelNotFoundError)` which is a specific exception. The report claims 12/12 pass. If `ValidationError` is not a `ValueError`, that test would fail. But this was mandated exactly by the brief, so even if it's wrong, it follows the spec.
+
+This is worth flagging as a risk but since (1) the brief mandates it, (2) the report says it passes, it's at most a Minor finding to note.
+
+### Spec Compliance
+
+All 5 required spec points are implemented:
+- `BuildSpec(BaseModel)` with `context: str` and `args: dict[str, str] = {}` ✅
+- `ModelEntry` gains `digest: str | None = None` and `build: BuildSpec | None = None` ✅
+- `pinned_ref()` returns `"&lt;repo&gt;@&lt;digest&gt;"` when digest set, strips `:tag` from final path segment only ✅
+- Registry host:port preserved (tested and logic correct) ✅
+- `digest` must start with `sha256:` — validator present ✅
+- `build` block is passive/ignored at runtime ✅
+- Contract schema unchanged ✅
+- All 5 mandated test cases present, matching the brief verbatim ✅
+- Commit message matches format ✅
+
+Global constraints:
+- `pinned_ref()` returns verbatim `image` when no digest ✅
+- `sha256:` validator present ✅
+- `build` is client-ignored ✅
+- Contract schema unchanged ✅
+
+---
+
+### Spec Compliance
+- ✅ Spec compliant: all requirements implemented. `BuildSpec`, `ModelEntry.digest`, `ModelEntry.build`, `pinned_ref()`, `_strip_tag()`, and the `sha256:` validator are all present and correct. All five mandated test cases are present verbatim. Commit message format is exact.
+
+### Strengths
+- `_strip_tag` logic is correct for all three cases: multi-path image (`ghcr.io/user/image:tag`), registry with port (`host:5000/repo:tag`), and bare image (`image:tag`). The `rpartition("/")` approach elegantly isolates the final path segment without disturbing host:port colons.
+- `field_validator` correctly handles the `None` passthrough case (`if value is not None`), making the validator safe for the optional field.
+- `BuildSpec` is properly marked producer-only in its docstring; no runtime client code touches it.
+- The `_entry` test helper cleanly isolates test construction from repetition, exactly matching the brief's template.
+- Pydantic v2 `dict` field default (`args: dict[str, str] = {}`) is safe — Pydantic copies defaults per-instance, unlike Python dataclass mutable defaults. No false concern here.
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+
+**`tests/test_registry.py:125` — `_entry` helper missing return type annotation**
+
+The global constraint and project CLAUDE.md both mandate "Type hints on all function signatures." The brief's own template code omits it, but the mandate binds the deliverable regardless. `ty check` may or may not flag this (depending on settings), but the convention is clear.
+
+Fix: `def _entry(**overrides: object) -&gt; ModelEntry:`
+
+#### Minor (Nice to Have)
+
+**`tests/test_registry.py:145-147` — `pytest.raises(ValueError)` may be fragile against Pydantic v2 `ValidationError`**
+
+In Pydantic v2, a `field_validator` raising `ValueError` internally is wrapped by `pydantic.ValidationError`, which does NOT inherit from `ValueError`. The test `pytest.raises(ValueError, match="sha256:")` would normally fail on Pydantic v2. The report claims 12/12 pass, so either the installed Pydantic version behaves differently or there's an environment-specific quirk. This is also mandated verbatim by the brief, so it's not an implementer error — but it's worth noting as a fragility risk. The more robust form is `pytest.raises(ValidationError)` with `from pydantic import ValidationError`.
+
+**`src/plms/registry.py:39` — mutable default `args: dict[str, str] = {}`**
+
+This is safe in Pydantic v2 (Pydantic handles copying), but `ruff` or `ty` may flag it as a style concern. If a linter upgrade introduces a warning here, a `Field(default_factory=dict)` form would silence it without behavioral change.
+
+### Assessment
+**Task quality:** Approved
+
+**Reasoning:** All spec requirements are implemented correctly — the `_strip_tag` logic handles all stated edge cases, the `sha256:` validator is wired up properly, `build` is passive, and all five mandated tests are present. The one Important finding (`_entry` missing return type) is a style violation of a project-wide rule but does not affect correctness or reliability.</result>
+<usage><subagent_tokens>23246</subagent_tokens><tool_uses>3</tool_uses><duration_ms>55025</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>af6c2a9b948943571</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/af6c2a9b948943571.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix Task 1: annotate _entry return" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>---
+
+**Status:** DONE
+
+**Commit:** `792b81e test: annotate _entry helper signature in test_registry`
+
+**Verification:** Ruff check passed, ty check passed, pytest passed (12 tests).</result>
+<usage><subagent_tokens>21545</subagent_tokens><tool_uses>10</tool_uses><duration_ms>27950</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a0d15d220f7879123</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a0d15d220f7879123.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 2: runner primitives" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Perfect! Now let me create the final summary:
+
+---
+
+## Status: DONE
+
+**Commit created:**
+- `be6fd12` runner: add image_present/pull primitives and ImagePullError
+
+**Test summary:**
+All 17 runner tests pass (5 new tests for image_present/pull + 12 pre-existing tests)
+
+**Changes:**
+- `src/plms/exceptions.py`: Added `ImagePullError(RunnerError)` 
+- `src/plms/runner.py`: Added `image_present` and `pull` to `Runner` protocol and `SubprocessDockerRunner`
+- `tests/test_runner.py`: Added 5 new test cases covering success/failure scenarios and auth detection
+
+**Validation:**
+- TDD workflow: wrote failing tests → implemented → all green
+- Ruff check/format: passed
+- Type check: passed
+- Full test suite: 17/17 passing
+
+**Report file:**
+`/home/briney/git/plms/.superpowers/sdd/task-2-report.md`</result>
+<usage><subagent_tokens>37704</subagent_tokens><tool_uses>28</tool_uses><duration_ms>104367</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a6e7d29ccb4ae3da0</task-id>
+<tool-use-id>toolu_016dCiW4PxFsuopi9X3eT46F</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a6e7d29ccb4ae3da0.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 2 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>### Spec Compliance
+- ✅ `ImagePullError(RunnerError)` added to `src/plms/exceptions.py` — correct parent class (diff line 28-29).
+- ✅ `image_present(self, ref: str) -&gt; bool` and `pull(self, ref: str) -&gt; None` added to `Runner` protocol (diff lines 80-82).
+- ✅ Both methods implemented on `SubprocessDockerRunner` (diff lines 105-126).
+- ✅ `image_present` wraps `docker image inspect &lt;ref&gt;` and returns `True` iff exit code is 0 (diff lines 107-108).
+- ✅ `pull` wraps `docker pull &lt;ref&gt;`; raises `ImagePullError` on non-zero exit carrying the ref, exit code, and stderr tail (diff lines 117-126).
+- ✅ Auth hint triggered on `denied`/`unauthorized`/`authentication` in stderr (case-insensitive lowercase match, diff line 121); hint text contains `docker login ghcr.io` (diff line 122).
+- ✅ No `ensure_image` added — scope confined to only what was requested.
+- ✅ `RunnerError` behavior via `_invoke` for missing docker executable is unchanged.
+- ✅ All five tests from the brief are present and match the spec's prescribed form (diff lines 176-224).
+- ✅ Commit message `runner: add image_present/pull primitives and ImagePullError` matches `&lt;component&gt;: &lt;description&gt;` format.
+- ⚠️ Cannot verify from diff: `ty check src/` output beyond the report's claim — the pre-existing `chunking.py` warning was noted but not shown. Not a blocker for this task.
+
+---
+
+### Strengths
+
+- The `image_present` implementation is correct and minimal: `_invoke` is reused so the existing `RunnerError` propagation for a missing docker executable is inherited for free, at no extra code cost.
+- Auth-hint detection uses `.lower()` so it is case-insensitive — good defensive choice not explicitly mandated by the spec.
+- The `pull` error message format is consistent with the existing `manifest` error format in the same class (`exit {code}; ... stderr: {tail[:500]}`).
+- The `test_image_present_true_on_zero_exit` test asserts the exact argv passed to subprocess — stronger than just testing the return value.
+- The `_invoke` call in both new methods correctly passes `self._docker` as the first element of the argv list rather than hardcoding `"docker"`, honoring the configurable executable.
+- Tests follow the established monkeypatch pattern and are self-contained with no external dependencies.
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+
+**`runner.py` lines 107, 117 — `_invoke` already prepends `self._docker`; the new methods double-prepend it.**
+
+Looking at the existing `manifest` method in the diff context (lines 94–103), its argv is built as `["docker", "manifest", "inspect", image]` — it does NOT use `self._docker` inside the argv list, it uses the literal string `"docker"`. The `_invoke` method signature just accepts whatever argv it's given and passes it to `subprocess.run`. By contrast, the new `image_present` and `pull` methods pass `[self._docker, "image", "inspect", ref]` — which is the correct pattern.
+
+Actually, re-reading the context at diff line 134: `self._invoke(argv)` where `argv` is built starting with `self._docker`. The `_invoke` body (diff lines 128–135) shows it passes argv directly to `subprocess.run` without modification. So the new methods do correctly use `self._docker`, while `manifest` hardcodes `"docker"`. This is actually an inconsistency in the existing code (manifest hardcodes `"docker"`), and the new methods are the more correct approach — no issue here.
+
+Withdrawing this finding after closer reading. No important issues found.
+
+#### Minor (Nice to Have)
+
+**`tests/test_runner.py` line 210 — `test_pull_nonzero_raises_image_pull_error` does not verify the exit code is included in the error message.**
+
+The spec says `ImagePullError` carries the ref, exit code, and stderr tail. The test checks `match="network unreachable"` (stderr present) but does not verify the ref or exit code appear in the message. Adding `match=r"img@sha256:abc.*exit 1.*network unreachable"` would give stronger coverage. This is a completeness note, not a correctness defect — the implementation does include all three fields.
+
+**`tests/test_runner.py` line 216-224 — only `denied` keyword is tested for the auth hint; `unauthorized` and `authentication` are not tested.**
+
+The spec mandates all three trigger words. Coverage for the other two would be good-to-have, though the implementation clearly handles them via the `any()` check.
+
+---
+
+### Assessment
+**Task quality:** Approved
+
+**Reasoning:** The implementation precisely matches every requirement in the brief — correct exception hierarchy, correct argv construction, correct return semantics for `image_present`, correct error construction for `pull` including the auth hint, and all five mandated tests present and correct. The two minor test-coverage gaps (exit code/ref in match string, only one auth keyword tested) are polish items that do not affect correctness or spec compliance.</result>
+<usage><subagent_tokens>25069</subagent_tokens><tool_uses>3</tool_uses><duration_ms>33482</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a0b14f2b709e7714b</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a0b14f2b709e7714b.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 3: ensure_image" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Summary
+
+**Status:** DONE
+
+**Commit created:**
+- `9b3f484 runner: add ensure_image orchestrator with pull escape hatch`
+
+**Test summary:** 21/21 passed (4 new ensure_image tests + 17 pre-existing), all code quality checks (ruff/format/ty) clean
+
+**Concerns:** None
+
+**Report file:** `/home/briney/git/plms/.superpowers/sdd/task-3-report.md`
+
+Implementation complete and verified. The `ensure_image()` module-level function orchestrates the Task 2 primitives correctly, raising `ImageNotFoundError` with helpful hints when images are absent and pulling disabled, and propagating `ImagePullError` on pull failures.</result>
+<usage><subagent_tokens>32219</subagent_tokens><tool_uses>17</tool_uses><duration_ms>62330</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a86742471d5502c90</task-id>
+<tool-use-id>toolu_01TcovmUFqNVYByBJnFJyfKM</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a86742471d5502c90.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 3 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>### Spec Compliance
+- ✅ `ensure_image` is a module-level function, not a protocol method — added after the `Runner` class, before `_current_user` (`runner.py` line 27 in diff).
+- ✅ Three-branch logic is correct: `image_present` → return; not `allow_pull` → `ImageNotFoundError`; else `runner.pull(ref)`.
+- ✅ `ImageNotFoundError` message references both `plms pull {model_name}` and `PLMS_NO_PULL` (`runner.py` lines 44–46 in diff).
+- ✅ `ImagePullError` is allowed to propagate — no try/except around `runner.pull(ref)`.
+- ✅ Signature matches spec exactly: `(runner: Runner, ref: str, *, allow_pull: bool, model_name: str) -&gt; None`.
+- ✅ Only two files changed; no production changes outside `ensure_image`.
+- ✅ `_RecordingRunner` test stand-in present as expected per brief.
+- ✅ All four specified test cases implemented with matching logic to the brief's template.
+- ✅ `ImagePullError` imported at test file line 75 (pre-existing, required for the propagation test).
+- ✅ Commit message `runner: add ensure_image orchestrator with pull escape hatch` matches `&lt;component&gt;: &lt;what changed and why&gt;` format.
+
+### Strengths
+
+- The implementation is verbatim faithful to the brief's code block, including wording of the error message — no drift.
+- `_RecordingRunner` is a clean, minimal test double. Injecting `pull_error` via constructor (rather than monkeypatching) keeps tests free of framework coupling.
+- Test coverage maps exactly to the four branches the spec mandates: noop, pull, deny-error, pull-propagates.
+- Placement of `ensure_image` between the `Runner` protocol and `_current_user` is exactly what the brief prescribes.
+- Logger usage (`logger.info`) is consistent with the module's existing pattern; no new imports needed.
+- No scope creep: `exceptions.py`, `models.py`, `registry.py`, and other files are untouched.
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+None.
+
+#### Minor (Nice to Have)
+
+- `tests/test_runner.py` line 133 — the `pytest.raises` match pattern is `"plms pull m"` (the literal model name from the fixture). This is correct, but also verifies that `PLMS_NO_PULL` appears in the message (required by spec). A tighter match like `match=r"plms pull m.*PLMS_NO_PULL"` would guard against future message changes that drop one of the two required hints. Current test only checks for `plms pull m`; the `PLMS_NO_PULL` portion of the requirement is exercised by the implementation but not asserted by any test. Worth one extra assertion or a broader regex.
+
+### Assessment
+**Task quality:** Approved
+
+**Reasoning:** The implementation matches the spec exactly — correct signature, correct three-branch logic, correct error message content, correct placement, and all four mandatory test cases present. The single minor gap (no assertion verifying `PLMS_NO_PULL` in the error message) is below the threshold of blocking but worth a one-line fix.</result>
+<usage><subagent_tokens>22637</subagent_tokens><tool_uses>3</tool_uses><duration_ms>23419</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ac34be47d4b1b71c9</task-id>
+<tool-use-id>toolu_01BLKMoTG9oUfvtghoba4YMH</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/ac34be47d4b1b71c9.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 4: load auto-pull" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>---
+
+**Status:** DONE
+
+**Commits created:** `643b01b` — `models: auto-pull pinned image on load with PLMS_NO_PULL escape hatch`
+
+**Test summary:** 32/32 test_models.py pass (27 pre-existing + 5 new); full non-slow suite 162 passed, 18 skipped. RED phase confirmed 4 failing tests before implementation.
+
+**Concerns:** None. One pre-existing `ty` warning in `chunking.py` (unused suppress comment) — not introduced by this task.
+
+**Report:** `/home/briney/git/plms/.superpowers/sdd/task-4-report.md`</result>
+<usage><subagent_tokens>48855</subagent_tokens><tool_uses>28</tool_uses><duration_ms>168726</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a510cf3ffead27a52</task-id>
+<tool-use-id>toolu_01JQ7PgXNayiYgkpuk51aM6u</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a510cf3ffead27a52.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 4 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>One `Model(` construction site, correctly using `image_ref=ref`. One `RunSpec(image=…)` site, correctly using `self._image_ref`. The implementation is clean.
+
+---
+
+### Spec Compliance
+- ✅ `load(name, *, runner=None, registry=None, allow_pull: bool | None = None) -&gt; Model` — implemented exactly as specified.
+- ✅ `_resolve_allow_pull`: explicit `allow_pull` wins; `PLMS_NO_PULL` set `{"1", "true", "yes"}` (case-insensitive via `.lower()`); defaults to `True`. (`models.py:451-456`)
+- ✅ `load` calls `entry.pinned_ref()` → `ref`, then `ensure_image(runner, ref, allow_pull=..., model_name=name)` BEFORE reading the manifest. (`models.py:488-489`)
+- ✅ Manifest read against the same pinned `ref`: `runner.manifest(ref)`. (`models.py:490`)
+- ✅ `Model.__init__` gains `image_ref: str`, stored as `self._image_ref`. (`models.py:73-79`)
+- ✅ Exactly ONE `RunSpec(image=…)` site, changed from `self._entry.image` to `self._image_ref`. (`models.py:372`; confirmed by grep — only one `RunSpec(` in models.py)
+- ✅ Exactly ONE `Model(` construction site, using `image_ref=ref`. (`models.py:492`; confirmed by grep)
+- ✅ `FakeRunner` updated with `present=True` default, `image_present()`, `pull()`, and `manifest_ref` recording. Pre-existing tests unaffected (`present=True` default means no pull attempted).
+- ✅ 5 new tests cover: image present → no pull; absent → pull pinned ref; manifest uses pinned ref; `allow_pull=False` → `ImageNotFoundError`; `PLMS_NO_PULL=1` → `ImageNotFoundError`.
+- ✅ `import os` added to stdlib imports.
+- ✅ `ensure_image` added to runner imports.
+- ✅ Only `src/plms/models.py` and `tests/test_models.py` changed.
+- ✅ Commit message format: `models: auto-pull pinned image on load with PLMS_NO_PULL escape hatch`.
+
+⚠️ Cannot verify from diff: `ty check src/` output beyond the implementer's claim of "1 pre-existing warning in chunking.py." The report notes this is pre-existing; no new `ty` issues in models.py are visible in the diff (types are straightforward: `bool | None`, `str`, `Runner` protocol).
+
+---
+
+### Strengths
+
+- The implementation matches the brief line-for-line in all critical paths: `pinned_ref()` → `ensure_image` → `manifest(ref)` → `Model(..., image_ref=ref)` → `RunSpec(image=self._image_ref)`. The ordering is correct.
+- `_resolve_allow_pull` correctly handles the truthy set with `.strip().lower()`, which also handles values with surrounding whitespace — a robustness detail not explicitly required.
+- The `FakeRunner` upgrade is backward-compatible: `present=True` default means every pre-existing `_load()` call continues to work without change.
+- Test `test_load_pulls_pinned_ref_when_absent` supplies its own `_registry_with_digest()` to force a digest-pinned ref, which isolates the assertion correctly from what the packaged registry contains.
+- The diff is minimal — 33 added lines in models.py and 60 in tests; no collateral changes.
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+None.
+
+#### Minor (Nice to Have)
+
+1. **tests/test_models.py — `test_load_skips_pull_when_image_present` uses default registry** (`present=True`)
+   The test correctly asserts `runner.pulled == []`, but it exercises the packaged registry's `esm2-8m` entry (no digest), so `ref` is the bare tag `"plms-esm2:t6_8M"`. This means the test does not exercise the path where a digest-pinned ref is skipped — that scenario is partly covered by `test_load_runs_manifest_against_pinned_ref` (uses `_registry_with_digest()`, `present=True`), but that test only asserts `manifest_ref`, not that `pulled == []`. Adding `assert runner.pulled == []` to `test_load_runs_manifest_against_pinned_ref` would make the skip-when-present assertion explicit for the digest-pinned ref path. Not a defect; both paths work — it's a coverage observation.
+
+2. **tests/test_models.py — `test_load_env_no_pull_disables_pull` only tests `"1"`**
+   The spec's truthy set is `{"1", "true", "yes"}`. Only `"1"` is tested; `"true"` and `"yes"` are not. `_resolve_allow_pull` handles all three correctly (line 455), but a parametrized test over the full set would give higher confidence. Minor because the implementation is clearly correct.
+
+3. **tests/test_models.py — `test_load_allow_pull_false_raises_when_absent` and `test_load_env_no_pull_disables_pull` use the default registry** (no `registry=_registry_with_digest()` passed)
+   Both tests use `FakeRunner(_manifest_json(), present=False)` without a registry override. The default packaged `esm2-8m` has no digest, so `pinned_ref()` returns the bare tag — `ensure_image` is still called and `image_present` returns `False`, which is sufficient for the test to pass. No correctness issue; but the tests don't exercise the digest-pinned ref in these error paths.
+
+---
+
+### Assessment
+**Task quality:** Approved
+
+**Reasoning:** All spec requirements are satisfied exactly — the pinned ref flows correctly through `ensure_image`, `runner.manifest`, and `RunSpec`; pull-policy resolution handles all required truthy values and precedence; the single `RunSpec` and `Model` construction sites are correctly updated; pre-existing tests are unaffected; and all five mandated new tests are present. The minor gaps are all coverage details, not correctness defects.</result>
+<usage><subagent_tokens>30596</subagent_tokens><tool_uses>14</tool_uses><duration_ms>82077</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ab675ab622960f04e</task-id>
+<tool-use-id>toolu_017mC8jpKAmEZk1bCorLzjH1</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/ab675ab622960f04e.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 5: CLI pull + --no-pull" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>---
+
+**Status:** DONE
+
+**Commits created:** `13d0776` — `cli: add plms pull command and --no-pull flag`
+
+**Test summary:** 17 passed in `tests/test_cli.py` (13 pre-existing + 4 new); 166 passed / 18 skipped full suite. TDD: 4 RED → 4 GREEN.
+
+**Concerns:** None. One pre-existing `ty` warning in `chunking.py` (unused `ty: ignore` from commit `6a87b59`) — not introduced by this task.
+
+**Report:** `/home/briney/git/plms/.superpowers/sdd/task-5-report.md`</result>
+<usage><subagent_tokens>42457</subagent_tokens><tool_uses>28</tool_uses><duration_ms>175865</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ad420768a26bc306c</task-id>
+<tool-use-id>toolu_01UvCHoTtEUCZQ9pYq8c1Dzs</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/ad420768a26bc306c.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 5 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The diff is complete and self-contained. I can now conduct the full review.
+
+**Checking the diff systematically:**
+
+1. **`score` command** — The diff shows hunks for `embed` (lines 98-127), `likelihood` (lines 129-151), and `generate` (lines 208+). The `score` command does NOT appear anywhere in the diff — it is entirely untouched. ✅
+
+2. **Exactly three `load(model, allow_pull=…)` edits** — counting from the diff:
+   - `embed`: line 115 — `load(model, allow_pull=False if no_pull else None)` ✅
+   - `likelihood`: line 142 — `load(model, allow_pull=False if no_pull else None)` ✅
+   - `generate`: line 169 — `load(model, allow_pull=False if no_pull else None)` ✅
+   
+   Exactly three. ✅
+
+3. **`pull` command logic** — Three branches in the correct order: `all_models` → `model is not None` → `else raise InvalidRequestError`. ✅
+
+4. **`ensure_image` call** — `ensure_image(docker_runner, ref, allow_pull=True, model_name=entry.name)` at diff line 92. Matches the spec exactly. ✅
+
+5. **Error routing** — `InvalidRequestError` is raised, caught by `except PlmsError as exc: _fail(exc)`. `InvalidRequestError` is a subclass of `PlmsError` (per the exception hierarchy), so this routes correctly. ✅
+
+6. **`_NoPullOpt` placement** — Added after `_ChunkSizeOpt`, consistent with the brief's instruction. ✅
+
+7. **`no_pull` parameter position** — Last parameter in all three command signatures, after `chunk_size`. ✅
+
+8. **Tests** — Four tests added, matching the brief's spec verbatim:
+   - `test_pull_command_pulls_resolved_model` verifies `allow_pull=True` and `model_name="esm2-8m"`. ✅
+   - `test_pull_all_pulls_every_model` checks count matches registry. ✅
+   - `test_pull_without_model_or_all_errors` asserts `exit_code == 1`. ✅
+   - `test_embed_no_pull_threads_allow_pull_false` captures kwargs and checks `allow_pull is False`. ✅
+
+9. **No tests for `likelihood --no-pull` or `generate --no-pull`** — The brief mandated exactly four tests; only `embed` gets the `--no-pull` test. The other two commands get `--no-pull` wired identically, so coverage is thin but the brief didn't request more. Minor gap.
+
+10. **`test_pull_without_model_or_all_errors`** — No monkeypatching of `SubprocessDockerRunner` or `ensure_image`. The error is raised before those are called (the `InvalidRequestError` is in the `else` branch before `SubprocessDockerRunner()` is instantiated), so no actual Docker call happens. Clean. ✅
+
+11. **`test_pull_command_pulls_resolved_model`** — Uses `"esm2-8m"` as the model name. This is an alias that must exist in the real registry yaml for the test to pass (no monkeypatching of `Registry.load()`). The test passes per the report, so the alias is valid. But this means the test has a subtle real-registry dependency. Low severity — this pattern is consistent with `test_pull_all_pulls_every_model` which also calls `Registry.load()` directly.
+
+12. **Commit message** — `cli: add plms pull command and --no-pull flag` — imperative mood, under 50 chars subject. ✅
+
+13. **Import in test file** — `from plms.registry import Registry` added correctly. ✅
+
+14. **`_NoPullOpt` type annotation** — `Annotated[bool, typer.Option("--no-pull", ...)]` — correct Typer pattern, consistent with `_GpuOpt` and `_BatchOpt`. ✅
+
+---
+
+### Spec Compliance
+- ✅ Spec compliant. All requirements verified from the diff.
+
+### Strengths
+
+- The `pull` command's three-branch structure (`--all` / named model / neither) is clean and follows the spec branch ordering exactly, with the `SubprocessDockerRunner` instantiation correctly deferred until after the validation guard.
+- The `ensure_image(..., allow_pull=True, model_name=entry.name)` call at `src/plms/cli.py:92` matches the spec signature precisely, including the keyword-only arguments.
+- `score` is confirmed absent from the diff — zero scope creep on the explicitly protected command.
+- Exactly three `load(model, allow_pull=…)` edits (embed/likelihood/generate), no more, no less.
+- `_NoPullOpt = False` as the last parameter in all three command signatures — consistent with the `_ChunkSizeOpt = None` precedent set in Phase 1.
+- The `InvalidRequestError → _fail()` routing is correct because `InvalidRequestError` inherits from `PlmsError`.
+- The four new tests match the brief's required test bodies verbatim, use the established `monkeypatch` + `CliRunner` pattern, and do not weaken existing assertions.
+- Commit message format matches the project convention.
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+None.
+
+#### Minor (Nice to Have)
+
+- **`tests/test_cli.py`, `test_pull_command_pulls_resolved_model` and `test_pull_all_pulls_every_model`** — `Registry.load()` is called with no monkeypatching. This is a real registry read, which makes these tests depend on the registry YAML containing an `"esm2-8m"` alias and at least one model. They pass today, but a registry refactor (renaming `esm2-8m`) would silently break these tests in ways unrelated to the pull logic. The brief itself prescribes this pattern, so this is not a defect in the implementation — it is a known tradeoff that the implementer inherited. Worth noting for future maintenance.
+
+- **`tests/test_cli.py`** — `--no-pull` threading is only tested on `embed`. The `likelihood` and `generate` commands receive identical wiring (same `_NoPullOpt` type alias, same `load(model, allow_pull=False if no_pull else None)` expression), so the coverage gap is low-risk. The brief specified exactly four tests, so this is within scope. A future pass could add `test_likelihood_no_pull_threads_allow_pull_false` and `test_generate_no_pull_threads_allow_pull_false` for symmetry.
+
+### Assessment
+**Task quality:** Approved
+
+**Reasoning:** The implementation matches every requirement in the spec — `pull` with three correct branches, exactly three `--no-pull` edits (embed/likelihood/generate), `score` untouched, `ensure_image` called with the correct signature, and errors routed through `_fail`. The two minor items are a registry-coupling pattern prescribed by the brief and a test-coverage gap the brief did not require to be filled.</result>
+<usage><subagent_tokens>24909</subagent_tokens><tool_uses>3</tool_uses><duration_ms>41403</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aadc8c43985a71c90</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/aadc8c43985a71c90.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 6: GHCR registry migration" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Status:** DONE
+
+**Commits created:** `53596c2` — `registry: point models.yaml at GHCR images with build metadata` (5 files, 32 insertions, 20 deletions)
+
+**Test summary:** 166 passed, 18 deselected (slow/docker-gated) in 0.22s; ruff and ty clean (one pre-existing chunking.py warning, exits 0).
+
+**Concerns:** None. In addition to the `test_default_registry_resolves_esm2_8m` assertion the brief called out, the progen2 and esm-c image assertions in `test_registry.py` were also updated — they would have failed against the new YAML and were implicit requirements.
+
+**Report:** `/home/briney/git/plms/.superpowers/sdd/task-6-report.md`</result>
+<usage><subagent_tokens>35804</subagent_tokens><tool_uses>26</tool_uses><duration_ms>137838</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ae821b567177fed00</task-id>
+<tool-use-id>toolu_0133N1Be9jtriz1voqM2MLbk</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/ae821b567177fed00.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 6 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I have all the information needed for a thorough review. Let me now analyze the diff against the requirements.
+
+**Named Risk — Build Args Cross-Check:**
+
+- `models.yaml` esm2-8m: `ESM2_CHECKPOINT: esm2_t6_8M`; integration test (`test_integration_esm2.py`) builds `IMAGE = "ghcr.io/briney/plms-esm2:t6_8M"` via `docker build -t IMAGE &lt;context&gt;` — no explicit `--build-arg` passed in the test. The test relies on the Dockerfile's default ARG value matching the registry's `args`. The diff shows the test build command at lines 96-102: it calls `docker build -t IMAGE str(REPO_ROOT / "containers" / "esm2")` with no `--build-arg`. The `models.yaml` build args are registry/CI metadata, not what the integration test actually passes. However this is the pre-existing pattern (the test always built without --build-arg) and is not a new regression introduced by this task — and is out of scope per the brief.
+
+**Test_registry.py extra assertions (Named Risk):**
+
+- `test_resolve_progen2_small`: old `"plms-progen2:small"` → new `"ghcr.io/briney/plms-progen2:small"`. New `models.yaml` shows `image: ghcr.io/briney/plms-progen2:small`. Match confirmed. Assertion strengthened (same form, updated value).
+- `test_resolve_esm_c` (two assertions): old `"plms-esm-c:300m"` → `"ghcr.io/briney/plms-esm-c:300m"` and `"plms-esm-c:600m"` → `"ghcr.io/briney/plms-esm-c:600m"`. New `models.yaml` shows both. Match confirmed. Assertions maintained, not weakened.
+
+---
+
+### Spec Compliance
+
+- ✅ All 5 model `image:` fields updated to `ghcr.io/briney/...` GHCR refs.
+- ✅ All 5 entries have a `build:` block with `context:` and `args:`. (`models.yaml` diff lines 34-36, 42-44, 50-52, 58-60, 66-68)
+- ✅ No `digest:` fields present anywhere in `models.yaml`.
+- ✅ Header comment updated exactly as specified: `# Images are published to GHCR; digests are pinned by .github/workflows/publish-image.yaml.`
+- ✅ `test_integration_esm2.py`: `IMAGE` = `"ghcr.io/briney/plms-esm2:t6_8M"` and `allow_pull=False` added.
+- ✅ `test_integration_esmc.py`: `IMAGE` = `"ghcr.io/briney/plms-esm-c:300m"` and `allow_pull=False` added.
+- ✅ `test_integration_progen2.py`: `IMAGE` = `"ghcr.io/briney/plms-progen2:small"` and `allow_pull=False` added.
+- ✅ `test_registry.py` esm2-8m assertion updated to `"ghcr.io/briney/plms-esm2:t6_8M"`.
+- ✅ YAML structure: all 5 entries use consistent 2-space indentation, `build:` block under `model_family:`, `context:` and `args:` correctly nested. No structural anomalies.
+- ✅ Commit message `registry: point models.yaml at GHCR images with build metadata` follows `&lt;component&gt;: &lt;what&gt;` format.
+- ✅ Non-slow suite: 166 passed per report; diff shows only the 5 specified files changed.
+- ✅ ruff and `ty check` clean (pre-existing `chunking.py:114` warning present but out of scope).
+
+### Strengths
+
+- The implementer correctly identified that `test_resolve_progen2_small` and `test_resolve_esm_c` would have failed with the new `models.yaml` and proactively updated them — these were implicit requirements even if not explicitly named in the brief's step-by-step.
+- All three updated assertions preserve the same assertion structure (equality check); none weakened to a `startswith`, `in`, or existence check.
+- YAML `args:` use flow-style inline `{ KEY: value }` consistently across all 5 entries — matches the exact format shown in the brief.
+- Integration test changes are surgical: only `IMAGE` constant and `allow_pull=False` argument modified, no other test logic touched.
+- The `_entry()` helper in `test_registry.py` (line 278) was already using `"ghcr.io/briney/plms-esm2:t6_8M"` as its image value in the context lines — showing the pre-existing test infrastructure was already anticipating GHCR refs.
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+None.
+
+#### Minor (Nice to Have)
+None identified. The implementation is clean, complete, and precise.
+
+---
+
+**Named Risk Verdict:** The extra `test_registry.py` assertion updates are correct and necessary. Each new expected value (`ghcr.io/briney/plms-progen2:small`, `ghcr.io/briney/plms-esm-c:300m`, `ghcr.io/briney/plms-esm-c:600m`) exactly matches the corresponding `image:` field in the new `models.yaml` hunk. No assertion was weakened or removed; all three remain strict equality checks.
+
+The `models.yaml` `build.args` vs. integration-test `docker build` args: the integration tests do not pass `--build-arg` to `docker build`, relying on Dockerfile defaults. This is a pre-existing pattern not introduced by this task and not in scope.
+
+### Assessment
+**Task quality:** Approved
+
+**Reasoning:** Every spec requirement is satisfied exactly as written — 5 GHCR image refs, 5 `build:` blocks, no `digest:` fields, all three integration tests updated with the correct `IMAGE` constant and `allow_pull=False`, and the additional registry test assertions are legitimate necessary updates (not regressions or weakening). No issues found.</result>
+<usage><subagent_tokens>25350</subagent_tokens><tool_uses>3</tool_uses><duration_ms>37265</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a5de4cb2d3ccb4344</task-id>
+<tool-use-id>toolu_01Ak9Gog4JBfrNKBvgoEEaqL</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a5de4cb2d3ccb4344.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 7: registry_publish script" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>---
+
+## Status: DONE
+
+**Commit created:**
+- `7b35d35 scripts: add registry_publish lookup/set-digest helpers`
+
+**Test summary:**
+- All 5 new tests pass; full suite green (171 passed, no regressions)
+
+**Files changed:**
+- `/home/briney/git/plms/scripts/__init__.py` (empty)
+- `/home/briney/git/plms/scripts/registry_publish.py` (141 lines)
+- `/home/briney/git/plms/tests/test_registry_publish.py` (78 lines)
+
+**Self-review findings:**
+- All TDD steps completed in order: RED → GREEN → LINT → COMMIT
+- Ruff check, format, and type check all clean
+- `scripts/__init__.py` intentionally empty per project rules
+- No concerns; implementation matches brief exactly
+
+**Report file:** `/home/briney/git/plms/.superpowers/sdd/task-7-report.md`</result>
+<usage><subagent_tokens>29459</subagent_tokens><tool_uses>17</tool_uses><duration_ms>77248</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a7b29720903135403</task-id>
+<tool-use-id>toolu_01FkyonT7qVo22ENcgREKqJK</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a7b29720903135403.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 7 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>### Spec Compliance
+- ✅ `lookup_build(models_yaml, name) -&gt; tuple[str, str, dict[str, str]]` — correct signature and return shape (`scripts/registry_publish.py:53`).
+- ✅ `KeyError` on unknown name — `_find` raises at line 50; test `test_lookup_build_unknown_name_raises` confirms.
+- ✅ `ValueError` on missing `build` block — line 63; test `test_lookup_build_missing_build_block_raises` confirms with `match="no build metadata"`.
+- ✅ `set_digest` digest validation — `startswith("sha256:")` check at line 74; `ValueError` raised.
+- ✅ `set_digest` writes onto the right entry and rewrites the file — `_find(data, name)["digest"] = digest` mutates the in-memory entry (which is a reference into `data`), then `yaml.safe_dump` rewrites the whole structure (line 77-78). Multi-entry preservation confirmed: `_load` parses all entries into `data["models"]`; only the matched entry dict gets a new key; `safe_dump` serializes the full `data` dict.
+- ✅ CLI `lookup` subcommand prints `image=`, `context=`, `build_args=` lines 89-91.
+- ✅ CLI `build_args` newline-separated `KEY=VALUE` — line 88 joins with `"\n"`.
+- ✅ CLI `set-digest` subcommand — line 93.
+- ✅ `scripts/__init__.py` is empty — diff shows `e69de29` (empty blob).
+- ✅ Dependency-light: only `yaml` imported; no ML deps.
+- ✅ Commit message matches required format: `scripts: add registry_publish lookup/set-digest helpers`.
+- ✅ Tests import from `scripts.registry_publish` (not mocked), operate on real parsed YAML, and assert on actual values.
+
+### Strengths
+
+- The `_find` helper correctly returns a reference into the live `data` dict (dicts in a Python list are mutable references), so `_find(data, name)["digest"] = digest` reliably mutates the right entry without a second search pass. This is the critical correctness detail for `set_digest`, and it works.
+- Tests are taken verbatim from the brief and cover all five mandated cases with real YAML fixtures — no mocks, no stubs.
+- `yaml.safe_dump(data, sort_keys=False, default_flow_style=False)` preserves insertion order and block style, avoiding surprising reformatting of an otherwise untouched file.
+- `_load` returns `or {}` to handle an empty file without crashing.
+- `main` uses a `match` statement as specified (Python 3.11+ idiom) and falls back to printing `__doc__` with exit code 2 for unrecognized invocations.
+- All tooling gates (ruff, ty, pytest) reported clean per the report.
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+None.
+
+#### Minor (Nice to Have)
+
+1. **`scripts/registry_publish.py:42` — double `Path()` wrap in `_load`**
+   `_load` accepts `models_yaml: Path` but immediately re-wraps it: `Path(models_yaml).read_text()`. Redundant but harmless (calling `Path(p)` on an existing `Path` is a no-op). Similarly, `set_digest` calls `_load(Path(models_yaml))` at line 76 even though the parameter is already typed `Path`. Minor type-hint noise; no behavioral impact.
+
+2. **`tests/test_registry_publish.py:157` — `import yaml` inside test body**
+   The `import yaml` in `test_set_digest_writes_and_roundtrips` is a function-level import. It works fine, but per the project's import style (stdlib → third-party → local at module level per `isort`), it belongs at the top of the file with the other imports. Not a correctness issue; ruff apparently didn't flag it because it's a valid style choice, but it's inconsistent with the rest of the file.
+
+3. **No test for `set_digest` preserving sibling entries in a multi-entry file**
+   The spec says `set_digest` must preserve the `name→digest` mapping without corrupting other entries. The implementation is correct (it dumps the whole `data` dict), but the test suite only uses a single-entry YAML. A two-entry fixture that checks the other entry is untouched after `set_digest` would make this guarantee explicit and regression-proof.
+
+4. **`set_digest` does not raise `KeyError` for an unknown name before writing**
+   Actually — re-checking: `_find(data, name)` is called at line 77 and will raise `KeyError` before `write_text` is invoked if the name is missing. No bug; the order is correct. Mentioned only to confirm the check was performed.
+
+### Assessment
+**Task quality:** Approved
+
+**Reasoning:** The implementation matches the spec exactly — correct function signatures, both error cases, correct CLI output format, empty `__init__.py`, and five passing tests against real YAML. The only findings are minor style nits (redundant `Path()` wrap, in-body import) that carry no behavioral or correctness risk.</result>
+<usage><subagent_tokens>24128</subagent_tokens><tool_uses>3</tool_uses><duration_ms>34793</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ac8d07a07a001a79f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/ac8d07a07a001a79f.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 8: GHCR publish workflow" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Excellent! Now let me provide the final summary:
+
+---
+
+## Task 8: DONE
+
+**Commit created:**
+- `043cc21` — ci: add manual GHCR publish workflow with digest-pin PR
+
+**YAML validation:** ✓ Parse check outputs `ok`
+
+**Files changed:**
+- Created `.github/workflows/publish-image.yaml` (80 lines, matches brief exactly)
+
+**Verification summary:**
+- Workflow file is valid YAML (python yaml.safe_load test passed)
+- Committed on `feature/phase2-ghcr-distribution` branch
+- Commit message follows `&lt;component&gt;: &lt;what changed and why&gt;` format
+- Working tree clean
+
+**No concerns.** The workflow is ready to use: it accepts a `model` input, resolves build metadata via the existing `scripts/registry_publish.py` (Task 7), builds and pushes to GHCR, and opens an automated PR to pin the digest in `models.yaml`.
+
+**Report:** `/home/briney/git/plms/.superpowers/sdd/task-8-report.md`</result>
+<usage><subagent_tokens>23293</subagent_tokens><tool_uses>10</tool_uses><duration_ms>41390</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a6c54cef4f0c57160</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a6c54cef4f0c57160.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 8 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The diff is concise and complete. I have everything needed to evaluate it directly against the spec without further file reads.
+
+---
+
+### Spec Compliance
+
+- **`workflow_dispatch` with `model` input** — ✅ Present. Line 20–25: `workflow_dispatch` with a `model` input, `required: true`, `type: string`.
+- **Permissions block** — ✅ Exact match. Lines 27–30: `contents: write`, `packages: write`, `pull-requests: write` — all three, no extras.
+- **Free disk space step** — ✅ Present. Lines 41–45.
+- **`lookup` step with `id: meta`** — ✅ Present. Line 55–57. Step id is `meta`.
+- **Downstream steps reference `steps.meta.outputs.*`** — ✅ `context` (line 70, 71), `image` (line 74), `build_args` (line 75), `image` again in PR body (line 90). All consistent with `id: meta`.
+- **`docker login ghcr.io` with `GITHUB_TOKEN`** — ✅ Lines 59–64. Login is before build (line 66).
+- **Build step `id: build`** — ✅ Line 67.
+- **Platform `linux/amd64`** — ✅ Line 72.
+- **`push: true`** — ✅ Line 73.
+- **Digest source: `steps.build.outputs.digest`** — ✅ `docker/build-push-action` exposes `outputs.digest`. References at lines 79, 87, 91. Consistent and correct.
+- **`set-digest` invoked with the digest** — ✅ Line 80: `python -m scripts.registry_publish set-digest "$MODELS_YAML" "${{ inputs.model }}" "$DIGEST"`. Ordering: after build (line 66), before PR (line 82). Correct.
+- **PR step scoped to `models.yaml`** — ✅ Line 96: `add-paths: ${{ env.MODELS_YAML }}` which resolves to `src/plms/_data/models.yaml`. Only that file is included.
+- **`peter-evans/create-pull-request@v6`** — ✅ Line 83.
+- **Step ordering** — ✅ checkout → free disk → Python setup → PyYAML install → lookup (meta) → login → build → set-digest → PR. Correct and logical.
+- **`MODELS_YAML` env var** — ✅ Defined at top-level env (line 33), used in `run` steps via `$MODELS_YAML` shell expansion (line 57, 80) and in `add-paths` via `${{ env.MODELS_YAML }}` (line 96). Consistent.
+
+⚠️ Cannot verify from diff: Whether `scripts/registry_publish.py` actually emits `image=`, `context=`, and `build_args=` to stdout in a format compatible with `&gt;&gt; "$GITHUB_OUTPUT"` — this was validated in Task 7 and is out of scope here, but it is the integration seam.
+
+⚠️ Cannot verify from diff: Whether `docker/build-push-action@v6` requires QEMU/buildx setup for `linux/amd64` builds on `ubuntu-latest` runners. For native amd64 hosts targeting amd64, buildx is present by default on GitHub-hosted runners since mid-2022, so this is almost certainly fine — but it is not confirmed by the diff alone.
+
+---
+
+### Strengths
+
+- The workflow is a verbatim match to the spec template. Every step, every `id`, every output reference, every `with:` key is correct and internally consistent — there are no typos in step ids or output names.
+- Step ordering is correct: login precedes push; lookup precedes build; set-digest precedes PR.
+- `add-paths` correctly restricts the PR to only `models.yaml`, preventing unintended files from being committed by `create-pull-request`.
+- The PR body is informative — it includes the image reference, digest, and the useful note about GHCR package visibility.
+- The `MODELS_YAML` env var is defined once and used consistently across all three places it appears, avoiding duplication bugs.
+- The commit message (`ci: add manual GHCR publish workflow with digest-pin PR`) matches the `&lt;component&gt;: &lt;what changed and why&gt;` format.
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+
+None.
+
+#### Important (Should Fix)
+
+None found. All wiring — step ids, output names, secret references, permissions, platform, digest source — is correct.
+
+#### Minor (Nice to Have)
+
+**`.github/workflows/publish-image.yaml` line 41 — `jlumbroso/free-disk-space@main` uses a floating ref.**
+
+All other actions use pinned version tags (`@v4`, `@v5`, `@v3`, `@v6`, `@v6`). `jlumbroso/free-disk-space@main` tracks the tip of `main`, which means a breaking change upstream could silently affect the workflow. The spec does not require a pinned SHA here, and `@main` is what the spec itself specifies, so this is a style-level note only. If consistency with the other pinned actions matters, pin to a release tag or a SHA.
+
+**`.github/workflows/publish-image.yaml` line 57 — single-line `build_args` assumption is not guarded.**
+
+The brief explicitly notes: "If a future model needs multiple build args, switch the `lookup` output to a `$GITHUB_OUTPUT` heredoc." This is acknowledged in both brief and report, and there is currently only one build arg per model, so the current approach is correct. No action required, but a comment in the YAML would help future editors understand why the output format matters.
+
+---
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** The implementation is an exact, correct transcription of the spec. Every step id, output reference, permission, platform, digest source, and PR scope is present and correctly wired — there are no functional defects. The only finding is that `jlumbroso/free-disk-space@main` uses a floating ref while all other actions are version-pinned, which is a style inconsistency inherited from the spec itself.</result>
+<usage><subagent_tokens>21182</subagent_tokens><tool_uses>3</tool_uses><duration_ms>38307</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a2b578afe63d4a91f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a2b578afe63d4a91f.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement Task 9: GHCR pull integration test" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Perfect. Now let me provide the final report:
+
+**Status:** DONE
+
+**Commit created:**
+- `dbbbead` — test: opt-in GHCR pull+run integration test
+
+**Verification summary:** Test collected + skipped by default (1 skipped); all 171 non-slow tests pass; ruff check/format clean
+
+**Concerns:** None
+
+**Report file:** `/home/briney/git/plms/.superpowers/sdd/task-9-report.md`</result>
+<usage><subagent_tokens>21637</subagent_tokens><tool_uses>10</tool_uses><duration_ms>34097</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>add6264754693cc13</task-id>
+<tool-use-id>toolu_01VDT7znuRKnWoTDyBbv8zsM</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/add6264754693cc13.output</output-file>
+<status>completed</status>
+<summary>Agent "Review Task 9 (spec + quality)" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>### Spec Compliance
+- ✅ Spec compliant
+
+The implementation is a verbatim copy of the spec's reference implementation. Every requirement is met:
+
+**Gating condition** (line 44–46): `os.environ.get("PLMS_RUN_GHCR_TESTS") != "1" or not _docker_available()` — with the env var unset, `get(...)` returns `None`, which `!= "1"` evaluates to `True`, so the short-circuit means `_docker_available()` is never called and the test is unconditionally skipped. Correct.
+
+**`@pytest.mark.slow`** (line 43): Applied via `pytestmark` list. Correct.
+
+**Image removal then load** (lines 52–54): Resolves the pinned ref, force-removes it, then calls `plms.load("esm2-8m", allow_pull=True)`. Matches spec exactly.
+
+**Meaningful assertion** (line 55): `assert model.manifest.model_family == "esm2"` — verifies the model actually loaded and the manifest is populated.
+
+**Commit message** `test: opt-in GHCR pull+run integration test` — matches the spec's prescribed message exactly.
+
+⚠️ Cannot verify from diff: whether `Registry.load().resolve("esm2-8m").pinned_ref()` exists as a method on the registry entry type. This depends on Task 4 / registry implementation not in the diff. If `pinned_ref()` doesn't exist, the test body would raise `AttributeError` when run with the flag set. Not a concern for default-skip CI.
+
+⚠️ Cannot verify from diff: whether `allow_pull=True` is a valid parameter on `plms.load()` (Task 4 dependency). Same caveat — only matters when the test actually runs.
+
+---
+
+### Strengths
+
+- **Docker probe is sound**: `shutil.which("docker")` guards against docker not being installed at all; `subprocess.run(["docker", "info"], ...)` checks the daemon is actually running. Both conditions are necessary and sufficient.
+- **Short-circuit evaluation**: The `or` in the `skipif` condition means `_docker_available()` (which spawns a subprocess) is never called when the env var is unset. This avoids a process spawn on every collection.
+- **`capture_output=True`** on both subprocess calls prevents noise in test output.
+- **`docker image rm -f`**: the `-f` flag prevents failure if the image doesn't exist locally, making the test idempotent.
+- **Module-level `pytestmark`**: correctly applies both markers to all tests in the file.
+- **Skip reason is informative** and actionable: tells the user exactly what to set.
+- **No mocks**: pure integration test, exercises real docker behavior.
+
+---
+
+### Issues
+
+#### Critical (Must Fix)
+None.
+
+#### Important (Should Fix)
+None.
+
+#### Minor (Nice to Have)
+
+**`tests/test_integration_ghcr.py:51`** — The test function has no docstring. The module docstring covers intent well, but a one-liner on the function (`"""Remove the esm2-8m image locally and verify it can be pulled and loaded from GHCR."""`) would match the project's "docstrings on all public functions" convention in CLAUDE.md. Not a correctness issue.
+
+---
+
+### Assessment
+**Task quality:** Approved
+
+**Reasoning:** The implementation is a faithful, verbatim transcription of the spec's reference code; the gating logic is correct (skip-by-default is guaranteed by short-circuit `or` with the env-var check first), the docker probe is sound, and the assertion verifies real behavior. The only open questions are cross-task API surface dependencies that cannot be evaluated from this diff alone.</result>
+<usage><subagent_tokens>20354</subagent_tokens><tool_uses>3</tool_uses><duration_ms>25642</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a67058022260d13ea</task-id>
+<tool-use-id>toolu_01HJoBLFgZHtNRm9wNAbgF3i</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/a67058022260d13ea.output</output-file>
+<status>completed</status>
+<summary>Agent "Final whole-branch review" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Confirmed: the entrypoint's `resolve_hf_id` (entrypoint.py:38) maps the short name `esm2_t6_8M` → `facebook/esm2_t6_8M_UR50D`. So `models.yaml`'s `ESM2_CHECKPOINT: esm2_t6_8M` is the correct, build-valid value. The spec's example using the long `facebook/...` form is just illustrative (the entrypoint accepts both forms per the README at line 22). No defect — the migration values are build-valid.
+
+I have everything I need. Here is my review.
+
+---
+
+### Strengths
+
+- **The pinned-ref seam is clean and complete.** `pinned_ref()` is computed once in `load()` (`models.py:489`), threaded through `ensure_image`, `runner.manifest(ref)`, and stored as `Model._image_ref`, which is the *single* `RunSpec(image=…)` construction site (`models.py:373`). Crucially, the chunked path is correct for free: `_run_chunked` (`models.py:396`) builds a `run_chunk` closure that delegates to the very same `_run_into_dir` (`models.py:408`) used by `_run`, so chunked embed/likelihood/generate all execute the pinned digest. There is no `entry.image` leak anywhere on the run/manifest path — the only remaining `entry.image` reference is `cli.py:74` (the `models list` display table), which is correct and intended.
+- **Producer/consumer split is respected at runtime.** The client never reads `entry.build`: `grep` shows `.build` is only consumed by `scripts/registry_publish.py` (the producer). `BuildSpec` is parsed by Pydantic but unused by client logic, exactly as the contract requires.
+- **Producer↔CI output contract matches.** `lookup`'s stdout (`image=`/`context=`/`build_args=`, `registry_publish.py:1679-1681`) maps 1:1 to the workflow's `steps.meta.outputs.{image,context,build_args}` (`publish-image.yaml:101-106`), and `set-digest`'s digest source is `steps.build.outputs.digest` (`publish-image.yaml:110`), which `docker/build-push-action@v6` does emit. The `set-digest` ValueError on a non-`sha256:` prefix gives a hard CI failure rather than writing a bad pin.
+- **Build-arg names match the Dockerfiles exactly.** esm2→`ESM2_CHECKPOINT`, progen2→`PROGEN2_CHECKPOINT`, esm-c→`ESMC_CHECKPOINT` — all three `models.yaml` `build.args` keys match the `ARG` declared in `containers/&lt;family&gt;/Dockerfile`. The *values* (`esm2_t6_8M`, etc.) are also build-valid: the esm2 entrypoint's `resolve_hf_id` maps the short name to the HF repo, so a fresh publish would build successfully.
+- **`score` exclusion is principled, not an oversight.** `score` still auto-pulls via `load(model)` (`cli.py:179`); it merely lacks the `--no-pull` *opt-out flag*, matching the spec and the Phase-1 `--chunk-size` precedent. Defensible and documented (commit `3434593`).
+- **Default UX before any digest is published is coherent.** With no digests yet, `pinned_ref()` returns the bare GHCR tag, so `load()` auto-pulls `ghcr.io/briney/...:&lt;tag&gt;` from GHCR — the intended pre-pin behavior. Integration tests pin `allow_pull=False` to force use of the locally-built image. No dead code; `manifest()`'s `ImageNotFoundError` is correctly retained as a backstop.
+
+### Issues
+
+#### Critical (Must Fix)
+None. The cross-task seams are sound; nothing blocks merge on correctness grounds.
+
+#### Important (Should Fix)
+None rise to "should fix before merge." The closest is the workflow's robustness for the *first-ever* publish (below), which is a one-time operational concern, not a code defect.
+
+#### Minor (Nice to Have)
+- **`publish-image.yaml:73` — `jlumbroso/free-disk-space@main` floating ref.** Every other action is version-pinned (`@v4/@v5/@v6/@v3`). A floating `@main` is a supply-chain and reproducibility wart in a workflow with `packages: write` + `contents: write`. Pin to a release tag/SHA. (T8)
+- **`publish-image.yaml:97` — no `docker/setup-buildx-action` before build.** `build-push-action@v6` emits `outputs.digest` reliably only with the buildx/BuildKit driver; on the default docker driver the digest can be empty, which would feed an empty string into `set-digest` and fail the run (a safe failure, but a confusing first-publish surprise). Add a `setup-buildx-action` step. (T8 harden-before-first-publish)
+- **`scripts/registry_publish.py:1135` — `set_digest` multi-entry preservation is untested.** The implementation rewrites the whole file via `yaml.safe_dump(..., sort_keys=False)` and is correct, but the only fixture is single-entry — which is *not* the real CI scenario (5 entries). Add a multi-entry round-trip test asserting the other four entries survive unmodified. Low risk, but it's the exact production path. (T7)
+- **`registry_publish.py` — `yaml.safe_dump` will drop the header comment and the inline `{ ... }` flow style** when CI rewrites `models.yaml`. The committed file's leading comment block and `args: { ... }` flow mappings will be reformatted to block style on the first auto-pin PR. Cosmetic and self-correcting (the PR is human-reviewed), but worth knowing the digest-pin PRs will show a larger-than-expected diff. Not blocking.
+- **Test coverage gaps carried from per-task reviews** (all low risk): `--no-pull` threading tested only on `embed`, not `likelihood`/`generate` (identically wired); pull-error test asserts only the stderr substring; auth-hint test covers only `denied`; `PLMS_NO_PULL` test covers only `"1"`; `ImageNotFoundError` test asserts the `plms pull m` half but not the `PLMS_NO_PULL` half of the hint; redundant `Path()` re-wrap and in-body `import yaml` in tests; GHCR integration test function lacks a docstring. None affect behavior.
+
+### Recommendations
+- Before the **first** `workflow_dispatch` run, add `docker/setup-buildx-action` and pin `free-disk-space`. These are the only things that could make the maiden publish surprising; both are workflow-file edits with no client impact and can land in a follow-up since the workflow is manually triggered (it cannot fire accidentally on merge).
+- Add the multi-entry `set_digest` test in the same follow-up — it's cheap and guards the real CI path.
+- Leave `score` as-is; the exclusion is correct and documented.
+
+### Assessment
+**Ready to merge?** Yes.
+
+**Reasoning:** Every cross-task seam I could independently verify is correct — the pinned ref flows end-to-end (including the chunking closure, which is the one path per-task reviews couldn't see), the producer/consumer split holds at runtime, the build-arg names and values match the Dockerfiles, and the producer→CI output contract lines up. The controller's verification (171 passing, clean lint/format, `ty` clean modulo the pre-existing Phase-1 warning) is consistent with the diff.
+
+**Pre-merge triage:**
+- **Must fix before merge:** Nothing. No critical or important code defects at the seams.
+- **Safe to defer (ideally before the first real publish, which is manual and cannot trigger on merge):** pin `jlumbroso/free-disk-space`, add `setup-buildx-action`, add the multi-entry `set_digest` test. These harden the maiden CI run, not the client.
+- **Pre-existing, do not touch in this branch:** `chunking.py:114` `ty: ignore` — confirmed untouched by this range (`git diff --stat` empty for that file) and `ty` still exits 0. Flag for a human to revisit under the CI-pinned numpy stub; not a blocker for this merge.</result>
+<usage><subagent_tokens>82336</subagent_tokens><tool_uses>10</tool_uses><duration_ms>90431</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ae9c3e2dab028f06f</task-id>
+<tool-use-id>toolu_01SjombAfcA8FQmwAT3fwseX</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-plms/dce0c854-5771-4ea4-8229-828048c49012/tasks/ae9c3e2dab028f06f.output</output-file>
+<status>completed</status>
+<summary>Agent "Apply final-review hardening items" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>---
+
+**Status:** DONE
+
+**Commits:**
+- `dc0339b` ci: pin free-disk-space and add buildx setup for reliable digest
+- `fbaa84d` test: cover set_digest multi-entry preservation
+
+**Verification:** test_registry_publish.py 6 passed; full non-slow suite 172 passed (19 deselected); YAML parse ok; ruff clean.
+
+**Concerns:** None.</result>
+<usage><subagent_tokens>24380</subagent_tokens><tool_uses>17</tool_uses><duration_ms>82758</duration_ms></usage>
+</task-notification>
+
+---
+
+2
