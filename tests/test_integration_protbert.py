@@ -66,7 +66,7 @@ def protbert_image() -> str:
 
 @pytest.fixture(scope="session")
 def model(protbert_image: str) -> protlms.Model:
-    return protlms.load("protbert")
+    return protlms.load("protbert", allow_pull=False)
 
 
 def test_manifest_is_read_through_client(model: protlms.Model) -> None:
