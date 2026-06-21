@@ -1,4 +1,4 @@
-"""Tests for the plms command-line interface."""
+"""Tests for the protlms command-line interface."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from plms.cli import app
-from plms.contract import Manifest, Result
-from plms.exceptions import ModelNotFoundError
-from plms.models import EmbeddingResult, GenerationResult, LikelihoodResult, ScoreResult
-from plms.registry import Registry
+from protlms.cli import app
+from protlms.contract import Manifest, Result
+from protlms.exceptions import ModelNotFoundError
+from protlms.models import EmbeddingResult, GenerationResult, LikelihoodResult, ScoreResult
+from protlms.registry import Registry
 
 runner = CliRunner()
 
@@ -137,7 +137,7 @@ def test_models_list_shows_registered_models() -> None:
 
 
 def test_embed_command_invokes_model(fasta: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app, ["embed", "esm2-8m", str(fasta), "-o", str(tmp_path / "out"), "--pooling", "mean"]
     )
@@ -147,7 +147,7 @@ def test_embed_command_invokes_model(fasta: Path, tmp_path: Path, monkeypatch) -
 
 
 def test_embed_command_parses_layers_and_gpu(fasta: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app,
         ["embed", "esm2-8m", str(fasta), "-o", str(tmp_path / "out"), "--layers", "-1,6", "--gpu"],
@@ -158,14 +158,14 @@ def test_embed_command_parses_layers_and_gpu(fasta: Path, tmp_path: Path, monkey
 
 
 def test_likelihood_command_invokes_model(fasta: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(app, ["likelihood", "esm2-8m", str(fasta), "-o", str(tmp_path / "out")])
     assert result.exit_code == 0, result.stdout
     assert FakeModel.last_call["method"] == "likelihood"
 
 
 def test_score_command_invokes_model(variants_csv: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app,
         [
@@ -183,11 +183,13 @@ def test_score_command_invokes_model(variants_csv: Path, tmp_path: Path, monkeyp
     assert FakeModel.last_call["scoring_method"] == "wt-marginal"
 
 
-def test_plms_error_reported_cleanly_with_exit_1(fasta: Path, tmp_path: Path, monkeypatch) -> None:
+def test_protlms_error_reported_cleanly_with_exit_1(
+    fasta: Path, tmp_path: Path, monkeypatch
+) -> None:
     def boom(name, **kw):  # noqa: ANN001, ANN003
         raise ModelNotFoundError("unknown model 'nope'")
 
-    monkeypatch.setattr("plms.cli.load", boom)
+    monkeypatch.setattr("protlms.cli.load", boom)
     result = runner.invoke(app, ["embed", "nope", str(fasta), "-o", str(tmp_path / "out")])
     assert result.exit_code == 1
     assert "unknown model" in result.stdout
@@ -195,11 +197,13 @@ def test_plms_error_reported_cleanly_with_exit_1(fasta: Path, tmp_path: Path, mo
     assert "Traceback" not in result.stdout
 
 
-def test_score_plms_error_reported_cleanly(variants_csv: Path, tmp_path: Path, monkeypatch) -> None:
+def test_score_protlms_error_reported_cleanly(
+    variants_csv: Path, tmp_path: Path, monkeypatch
+) -> None:
     def boom(name, **kw):  # noqa: ANN001, ANN003
         raise ModelNotFoundError("unknown model 'nope'")
 
-    monkeypatch.setattr("plms.cli.load", boom)
+    monkeypatch.setattr("protlms.cli.load", boom)
     result = runner.invoke(app, ["score", "nope", str(variants_csv), "-o", str(tmp_path / "out")])
     assert result.exit_code == 1
     assert "unknown model" in result.stdout
@@ -207,7 +211,7 @@ def test_score_plms_error_reported_cleanly(variants_csv: Path, tmp_path: Path, m
 
 
 def test_score_command_default_method(variants_csv: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app, ["score", "esm2-8m", str(variants_csv), "-o", str(tmp_path / "out")]
     )
@@ -216,7 +220,7 @@ def test_score_command_default_method(variants_csv: Path, tmp_path: Path, monkey
 
 
 def test_generate_command_invokes_model(prompts: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app,
         [
@@ -246,7 +250,7 @@ def test_generate_command_invokes_model(prompts: Path, tmp_path: Path, monkeypat
 
 
 def test_embed_command_forwards_chunk_size(fasta: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app,
         ["embed", "esm2-8m", str(fasta), "-o", str(tmp_path / "out"), "--chunk-size", "1000"],
@@ -256,14 +260,14 @@ def test_embed_command_forwards_chunk_size(fasta: Path, tmp_path: Path, monkeypa
 
 
 def test_embed_command_chunk_size_defaults_none(fasta: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(app, ["embed", "esm2-8m", str(fasta), "-o", str(tmp_path / "out")])
     assert result.exit_code == 0, result.stdout
     assert FakeModel.last_call["chunk_size"] is None
 
 
 def test_likelihood_command_forwards_chunk_size(fasta: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app,
         ["likelihood", "esm2-8m", str(fasta), "-o", str(tmp_path / "out"), "--chunk-size", "500"],
@@ -273,7 +277,7 @@ def test_likelihood_command_forwards_chunk_size(fasta: Path, tmp_path: Path, mon
 
 
 def test_generate_command_forwards_chunk_size(prompts: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app,
         ["generate", "progen2-small", str(prompts), "-o", str(tmp_path / "o"), "--chunk-size", "8"],
@@ -284,9 +288,9 @@ def test_generate_command_forwards_chunk_size(prompts: Path, tmp_path: Path, mon
 
 def test_pull_command_pulls_resolved_model(monkeypatch) -> None:
     calls: list[tuple[str, bool, str]] = []
-    monkeypatch.setattr("plms.cli.SubprocessDockerRunner", lambda: object())
+    monkeypatch.setattr("protlms.cli.SubprocessDockerRunner", lambda: object())
     monkeypatch.setattr(
-        "plms.cli.ensure_image",
+        "protlms.cli.ensure_image",
         lambda runner, ref, *, allow_pull, model_name: calls.append((ref, allow_pull, model_name)),
     )
     result = runner.invoke(app, ["pull", "esm2-8m"])
@@ -296,9 +300,9 @@ def test_pull_command_pulls_resolved_model(monkeypatch) -> None:
 
 def test_pull_all_pulls_every_model(monkeypatch) -> None:
     pulled: list[str] = []
-    monkeypatch.setattr("plms.cli.SubprocessDockerRunner", lambda: object())
+    monkeypatch.setattr("protlms.cli.SubprocessDockerRunner", lambda: object())
     monkeypatch.setattr(
-        "plms.cli.ensure_image",
+        "protlms.cli.ensure_image",
         lambda runner, ref, *, allow_pull, model_name: pulled.append(model_name),
     )
     result = runner.invoke(app, ["pull", "--all"])
@@ -318,7 +322,7 @@ def test_embed_no_pull_threads_allow_pull_false(fasta: Path, tmp_path: Path, mon
         captured.update(kw)
         return FakeModel()
 
-    monkeypatch.setattr("plms.cli.load", fake_load)
+    monkeypatch.setattr("protlms.cli.load", fake_load)
     result = runner.invoke(
         app, ["embed", "esm2-8m", str(fasta), "-o", str(tmp_path / "out"), "--no-pull"]
     )

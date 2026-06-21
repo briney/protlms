@@ -4,7 +4,7 @@
 
 **Goal:** Add a contract-compliant `containers/esm-c/` image (plus two registry entries and tests) wrapping the ESM-C masked protein language model for `embed`, `likelihood`, and `score` — with zero client production-code changes.
 
-**Architecture:** ESM-C is a bidirectional masked LM (same capability surface as ESM2). It ships as a standalone Docker image whose entrypoint implements the plms container contract using EvolutionaryScale's native `esm` SDK (`ESMC.from_pretrained`). The client never changes — it resolves a new registry name to the image and speaks the existing contract.
+**Architecture:** ESM-C is a bidirectional masked LM (same capability surface as ESM2). It ships as a standalone Docker image whose entrypoint implements the protlms container contract using EvolutionaryScale's native `esm` SDK (`ESMC.from_pretrained`). The client never changes — it resolves a new registry name to the image and speaks the existing contract.
 
 **Tech Stack:** Python 3.12, the `esm` package (`esm==3.2.3`, EvolutionaryScale), PyTorch (pulled transitively), Docker. The client side touches only `models.yaml` (YAML) and a pytest test.
 
@@ -12,15 +12,15 @@
 
 These apply to **every** task. Exact values copied from the design spec (`docs/superpowers/specs/2026-06-19-esm-c-container-design.md`):
 
-- **Contract version:** `"0.3"`. No contract changes — `docs/CONTRACT.md` and `src/plms/contract.py` are NOT edited.
-- **No client production-code changes.** Only `src/plms/_data/models.yaml` (registry data) and tests are touched on the client side. `contract.py`, `models.py`, `io.py`, `cli.py`, `runner.py`, `registry.py` are untouched.
+- **Contract version:** `"0.3"`. No contract changes — `docs/CONTRACT.md` and `src/protlms/contract.py` are NOT edited.
+- **No client production-code changes.** Only `src/protlms/_data/models.yaml` (registry data) and tests are touched on the client side. `contract.py`, `models.py`, `io.py`, `cli.py`, `runner.py`, `registry.py` are untouched.
 - **Capabilities:** `embed`, `likelihood`, `score`. No `generate`.
 - **Backend:** native `esm` SDK only (`from esm.models.esmc import ESMC`). Not the transformers/ESM++ port.
 - **Checkpoints:** `esmc_300m` (default + tested) and `esmc_600m` (wired + buildable, not in the routine test path). Checkpoint strings are exactly `"esmc_300m"` / `"esmc_600m"`.
 - **`use_flash_attn=False`** always — keeps the image CPU-buildable and CPU-runnable with no flash-attn dependency.
 - **Base image:** `python:3.12-slim-bookworm`. The `esm` package requires Python `>=3.12,<3.13`, so ESM2's `pytorch/pytorch:2.5.1` base (Python 3.11) cannot be reused.
 - **`max_sequence_length = 2048`** (documented ceiling; longer inputs truncated with a warning, as in ESM2). **`default_batch_size = 8`**.
-- **Manifest dims come from a checkpoint-keyed table** (`_MODEL_INFO`), keeping `manifest` model-load-free so `plms.load()` stays fast. (Refinement of the spec's "derive from model": the checkpoint name pins the architecture, so the table is equally drift-proof and far cheaper.) 300M → `embedding_dim 960`, `num_layers 30`; 600M → `1152`, `36`.
+- **Manifest dims come from a checkpoint-keyed table** (`_MODEL_INFO`), keeping `manifest` model-load-free so `protlms.load()` stays fast. (Refinement of the spec's "derive from model": the checkpoint name pins the architecture, so the table is equally drift-proof and far cheaper.) 300M → `embedding_dim 960`, `num_layers 30`; 600M → `1152`, `36`.
 - **Embed layer support:** final layer only (`--layers -1`, the client default). Any other layer index → a structured `InvalidInput` error. Documented in the README.
 - **Per-residue / pooling layout:** ESM-C tokenization is BOS at index 0, residue `i` (1-indexed) at token index `i`, EOS last — identical to ESM2. Strip BOS/EOS for per-residue; `cls` pooling = the BOS vector.
 - **Standalone container code:** `containers/esm-c/entrypoint.py` duplicates pure helpers from ESM2 by design (each container is self-contained; same pattern as `containers/progen2/`). Heavy imports (`torch`, `esm`) live **inside functions** so pure helpers unit-test without the ML stack.
@@ -34,12 +34,12 @@ These apply to **every** task. Exact values copied from the design spec (`docs/s
 Adds the two ESM-C registry entries and a test proving they resolve. This is the only client-side change and is independently shippable.
 
 **Files:**
-- Modify: `src/plms/_data/models.yaml` (append two entries)
+- Modify: `src/protlms/_data/models.yaml` (append two entries)
 - Test: `tests/test_registry.py` (append one test)
 
 **Interfaces:**
-- Consumes: `plms.registry.Registry.load()` / `.resolve(name)` → `ModelEntry(name, aliases, image, model_family)` (existing).
-- Produces: resolvable names `esm-c-300m` (alias `esmc_300m`) → image `plms-esm-c:300m`, and `esm-c-600m` (alias `esmc_600m`) → image `plms-esm-c:600m`, both `model_family="esm-c"`.
+- Consumes: `protlms.registry.Registry.load()` / `.resolve(name)` → `ModelEntry(name, aliases, image, model_family)` (existing).
+- Produces: resolvable names `esm-c-300m` (alias `esmc_300m`) → image `protlms-esm-c:300m`, and `esm-c-600m` (alias `esmc_600m`) → image `protlms-esm-c:600m`, both `model_family="esm-c"`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -49,11 +49,11 @@ Append to `tests/test_registry.py`:
 def test_resolve_esm_c() -> None:
     registry = Registry.load()
     e300 = registry.resolve("esm-c-300m")
-    assert e300.image == "plms-esm-c:300m"
+    assert e300.image == "protlms-esm-c:300m"
     assert e300.model_family == "esm-c"
     assert registry.resolve("esmc_300m") == e300
     e600 = registry.resolve("esm-c-600m")
-    assert e600.image == "plms-esm-c:600m"
+    assert e600.image == "protlms-esm-c:600m"
     assert e600.model_family == "esm-c"
     assert registry.resolve("esmc_600m") == e600
 ```
@@ -65,16 +65,16 @@ Expected: FAIL — `ModelNotFoundError: unknown model 'esm-c-300m'`.
 
 - [ ] **Step 3: Add the registry entries**
 
-Append to `src/plms/_data/models.yaml` (after the `progen2-small` entry):
+Append to `src/protlms/_data/models.yaml` (after the `progen2-small` entry):
 
 ```yaml
   - name: esm-c-300m
     aliases: [esmc_300m]
-    image: plms-esm-c:300m
+    image: protlms-esm-c:300m
     model_family: esm-c
   - name: esm-c-600m
     aliases: [esmc_600m]
-    image: plms-esm-c:600m
+    image: protlms-esm-c:600m
     model_family: esm-c
 ```
 
@@ -86,7 +86,7 @@ Expected: PASS (all registry tests, including the new one).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/plms/_data/models.yaml tests/test_registry.py
+git add src/protlms/_data/models.yaml tests/test_registry.py
 git commit -m "registry: add esm-c-300m/600m entries"
 ```
 
@@ -204,7 +204,7 @@ Create `containers/esm-c/entrypoint.py` with this exact content:
 #!/usr/bin/env python
 """Contract-compliant entrypoint for the ESM-C model image.
 
-Implements the plms container contract (see docs/CONTRACT.md) for the ESM-C
+Implements the protlms container contract (see docs/CONTRACT.md) for the ESM-C
 masked protein language model via EvolutionaryScale's native ``esm`` SDK. Exposes
 the ``manifest``, ``embed``, ``likelihood``, and ``score`` subcommands plus a
 hidden ``_prefetch`` used at build time to bake weights into the image.
@@ -670,7 +670,7 @@ def _write_capability_result(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="esm-c", description="ESM-C plms contract entrypoint.")
+    parser = argparse.ArgumentParser(prog="esm-c", description="ESM-C protlms contract entrypoint.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("manifest").set_defaults(func=cmd_manifest)
@@ -745,19 +745,19 @@ Makes the image buildable: Python-3.12 base, `esm` installed, weights baked in, 
 
 **Interfaces:**
 - Consumes: `containers/esm-c/entrypoint.py` (Task 2), env var `ESMC_CHECKPOINT`.
-- Produces: a buildable image tagged `plms-esm-c:300m` (and `:600m`) whose `ENTRYPOINT` is the contract CLI. Used by Task 4.
+- Produces: a buildable image tagged `protlms-esm-c:300m` (and `:600m`) whose `ENTRYPOINT` is the contract CLI. Used by Task 4.
 
 - [ ] **Step 1: Create the Dockerfile**
 
 Create `containers/esm-c/Dockerfile`:
 
 ```dockerfile
-# ESM-C model image for the plms container contract.
+# ESM-C model image for the protlms container contract.
 #
 # Build (300M, default / CI):
-#   docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t plms-esm-c:300m containers/esm-c
+#   docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t protlms-esm-c:300m containers/esm-c
 # Build (600M):
-#   docker build --build-arg ESMC_CHECKPOINT=esmc_600m -t plms-esm-c:600m containers/esm-c
+#   docker build --build-arg ESMC_CHECKPOINT=esmc_600m -t protlms-esm-c:600m containers/esm-c
 #
 # Weights are baked in at build time, so runtime needs no network access.
 # The image runs on CPU by default and uses the GPU when launched with --gpus.
@@ -794,12 +794,12 @@ ENTRYPOINT ["python", "/app/entrypoint.py"]
 
 - [ ] **Step 2: Build the image to verify it succeeds**
 
-Run: `docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t plms-esm-c:300m containers/esm-c`
+Run: `docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t protlms-esm-c:300m containers/esm-c`
 Expected: build completes; the final `_prefetch` layer prints `prefetched esmc_300m`. (First build is slow: it pulls torch + esm and downloads the 300M weights.)
 
 - [ ] **Step 3: Smoke-test the manifest**
 
-Run: `docker run --rm plms-esm-c:300m manifest`
+Run: `docker run --rm protlms-esm-c:300m manifest`
 Expected: one line of JSON with `"model_family": "esm-c"`, `"embedding_dim": 960`, `"num_layers": 30`, `"capabilities": ["embed","likelihood","score"]`, `"contract_version": "0.3"`.
 
 - [ ] **Step 4: Create the README**
@@ -811,7 +811,7 @@ Create `containers/esm-c/README.md`:
 
 A contract-compliant Docker image wrapping the
 [ESM-C](https://huggingface.co/EvolutionaryScale/esmc-300m-2024-12) masked
-protein language model (EvolutionaryScale). It implements the plms container
+protein language model (EvolutionaryScale). It implements the protlms container
 contract (see [`../../docs/CONTRACT.md`](../../docs/CONTRACT.md)) using the native
 `esm` SDK, and exposes the `manifest`, `embed`, `likelihood`, and `score`
 subcommands.
@@ -823,10 +823,10 @@ its weights are baked into the image, so runtime requires no network access.
 
 ```bash
 # 300M (demo / CI default)
-docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t plms-esm-c:300m containers/esm-c
+docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t protlms-esm-c:300m containers/esm-c
 
 # 600M
-docker build --build-arg ESMC_CHECKPOINT=esmc_600m -t plms-esm-c:600m containers/esm-c
+docker build --build-arg ESMC_CHECKPOINT=esmc_600m -t protlms-esm-c:600m containers/esm-c
 ```
 
 `ESMC_CHECKPOINT` accepts `esmc_300m` or `esmc_600m`. The 300M/600M weights are
@@ -836,17 +836,17 @@ EvolutionaryScale Forge API-only and is not supported by this image.
 ## Running directly (debugging)
 
 ```bash
-docker run --rm plms-esm-c:300m manifest
+docker run --rm protlms-esm-c:300m manifest
 
 docker run --rm -v "$PWD/in:/in:ro" -v "$PWD/out:/out:rw" \
-  plms-esm-c:300m embed --input /in/seqs.fasta --output /out --pooling mean
+  protlms-esm-c:300m embed --input /in/seqs.fasta --output /out --pooling mean
 
 docker run --rm --gpus all -v "$PWD/in:/in:ro" -v "$PWD/out:/out:rw" \
-  plms-esm-c:300m likelihood --input /in/seqs.fasta --output /out
+  protlms-esm-c:300m likelihood --input /in/seqs.fasta --output /out
 ```
 
-Normally you do not run these by hand — the `plms` client builds these commands
-for you (`plms embed esm-c-300m seqs.fasta -o out/`).
+Normally you do not run these by hand — the `protlms` client builds these commands
+for you (`protlms embed esm-c-300m seqs.fasta -o out/`).
 
 ## Models
 
@@ -878,14 +878,14 @@ git commit -m "esm-c: Dockerfile (python:3.12 base, esm SDK, baked weights) + RE
 
 ### Task 4: End-to-end Docker integration test
 
-Proves the model-backed subcommands work through the real `plms` client against the built 300M image. Gated like the ESM2/ProGen2 integration tests.
+Proves the model-backed subcommands work through the real `protlms` client against the built 300M image. Gated like the ESM2/ProGen2 integration tests.
 
 **Files:**
 - Create: `tests/test_integration_esmc.py`
 - Reuses: `tests/data/tiny.fasta` (`insulin_b`, `gb1`, `melittin`), `tests/data/variants.csv` (`self`, `single`, `double`).
 
 **Interfaces:**
-- Consumes: the registry entry `esm-c-300m` (Task 1), the image `plms-esm-c:300m` (Task 3), `plms.load`/`Model.embed`/`.likelihood`/`.score` (existing client API).
+- Consumes: the registry entry `esm-c-300m` (Task 1), the image `protlms-esm-c:300m` (Task 3), `protlms.load`/`Model.embed`/`.likelihood`/`.score` (existing client API).
 - Produces: nothing downstream (final task).
 
 - [ ] **Step 1: Write the integration test**
@@ -895,9 +895,9 @@ Create `tests/test_integration_esmc.py`:
 ```python
 """End-to-end integration test against a locally built ESM-C image.
 
-Gated: runs only when ``PLMS_RUN_DOCKER_TESTS=1`` and a working Docker daemon is
+Gated: runs only when ``PROTLMS_RUN_DOCKER_TESTS=1`` and a working Docker daemon is
 available. Builds the ``esmc_300m`` image if it is not already present, then
-drives the real ``plms`` client through embed, likelihood, and score on a small
+drives the real ``protlms`` client through embed, likelihood, and score on a small
 FASTA / variants CSV of real protein sequences.
 """
 
@@ -912,9 +912,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import plms
+import protlms
 
-IMAGE = "plms-esm-c:300m"
+IMAGE = "protlms-esm-c:300m"
 EMBEDDING_DIM = 960
 REPO_ROOT = Path(__file__).parents[1]
 TINY_FASTA = REPO_ROOT / "tests" / "data" / "tiny.fasta"
@@ -931,8 +931,8 @@ def _docker_available() -> bool:
 pytestmark = [
     pytest.mark.slow,
     pytest.mark.skipif(
-        os.environ.get("PLMS_RUN_DOCKER_TESTS") != "1" or not _docker_available(),
-        reason="set PLMS_RUN_DOCKER_TESTS=1 and ensure a Docker daemon is available",
+        os.environ.get("PROTLMS_RUN_DOCKER_TESTS") != "1" or not _docker_available(),
+        reason="set PROTLMS_RUN_DOCKER_TESTS=1 and ensure a Docker daemon is available",
     ),
 ]
 
@@ -960,18 +960,18 @@ def esmc_image() -> str:
 
 
 @pytest.fixture(scope="session")
-def model(esmc_image: str) -> plms.Model:
-    return plms.load("esm-c-300m")
+def model(esmc_image: str) -> protlms.Model:
+    return protlms.load("esm-c-300m")
 
 
-def test_manifest_is_read_through_client(model: plms.Model) -> None:
+def test_manifest_is_read_through_client(model: protlms.Model) -> None:
     assert model.manifest.name == "esmc_300m"
     assert model.manifest.embedding_dim == EMBEDDING_DIM
     capabilities = {c.value for c in model.manifest.capabilities}
     assert {"embed", "likelihood", "score"} <= capabilities
 
 
-def test_embed_pooled_end_to_end(model: plms.Model, tmp_path: Path) -> None:
+def test_embed_pooled_end_to_end(model: protlms.Model, tmp_path: Path) -> None:
     result = model.embed(TINY_FASTA, pooling="mean", output_dir=tmp_path / "emb")
     pooled = result.pooled()
     assert set(pooled) == EXPECTED_IDS
@@ -981,7 +981,7 @@ def test_embed_pooled_end_to_end(model: plms.Model, tmp_path: Path) -> None:
         assert np.isfinite(vector).all()
 
 
-def test_embed_per_residue_end_to_end(model: plms.Model, tmp_path: Path) -> None:
+def test_embed_per_residue_end_to_end(model: protlms.Model, tmp_path: Path) -> None:
     result = model.embed(TINY_FASTA, pooling="none", output_dir=tmp_path / "pr")
     per_residue = result.per_residue()
     assert set(per_residue) == EXPECTED_IDS
@@ -989,7 +989,7 @@ def test_embed_per_residue_end_to_end(model: plms.Model, tmp_path: Path) -> None
     assert per_residue["melittin"].shape == (26, EMBEDDING_DIM)
 
 
-def test_likelihood_end_to_end(model: plms.Model, tmp_path: Path) -> None:
+def test_likelihood_end_to_end(model: protlms.Model, tmp_path: Path) -> None:
     result = model.likelihood(TINY_FASTA, output_dir=tmp_path / "ll")
     rows = {row["record_id"]: row for row in result.rows()}
     assert set(rows) == EXPECTED_IDS
@@ -1000,7 +1000,7 @@ def test_likelihood_end_to_end(model: plms.Model, tmp_path: Path) -> None:
     assert result.result.params["likelihood_method"] == "masked_marginal"
 
 
-def test_score_masked_marginal_end_to_end(model: plms.Model, tmp_path: Path) -> None:
+def test_score_masked_marginal_end_to_end(model: protlms.Model, tmp_path: Path) -> None:
     result = model.score(VARIANTS_CSV, method="masked-marginal", output_dir=tmp_path / "sc")
     rows = {r["variant_id"]: r for r in result.rows()}
     assert set(rows) == {"self", "single", "double"}
@@ -1012,10 +1012,10 @@ def test_score_masked_marginal_end_to_end(model: plms.Model, tmp_path: Path) -> 
 
 - [ ] **Step 2: Run the integration test (gated)**
 
-Run: `PLMS_RUN_DOCKER_TESTS=1 pytest tests/test_integration_esmc.py -v -m slow`
-Expected: PASS. The session fixture builds `plms-esm-c:300m` on first run (slow), then all five tests pass. This is where the SDK forward path (`out.embeddings`, `out.sequence_logits`), the BOS/EOS slicing, the mask-token PLL, and tokenizer AA→id mapping are proven correct.
+Run: `PROTLMS_RUN_DOCKER_TESTS=1 pytest tests/test_integration_esmc.py -v -m slow`
+Expected: PASS. The session fixture builds `protlms-esm-c:300m` on first run (slow), then all five tests pass. This is where the SDK forward path (`out.embeddings`, `out.sequence_logits`), the BOS/EOS slicing, the mask-token PLL, and tokenizer AA→id mapping are proven correct.
 
-> **If `embeddings`/`sequence_logits` shapes or attribute names differ from this plan** (the one residual SDK unknown): confirm against the installed `esm==3.2.3` with a one-off `docker run --rm plms-esm-c:300m python -c "..."`, and adjust `_embed_one` / `_pseudo_log_likelihood` accordingly. The documented fallback is the high-level `model.logits(model.encode(ESMProtein(sequence=seq)), LogitsConfig(sequence=True, return_embeddings=True))` API returning `out.logits.sequence` and `out.embeddings`.
+> **If `embeddings`/`sequence_logits` shapes or attribute names differ from this plan** (the one residual SDK unknown): confirm against the installed `esm==3.2.3` with a one-off `docker run --rm protlms-esm-c:300m python -c "..."`, and adjust `_embed_one` / `_pseudo_log_likelihood` accordingly. The documented fallback is the high-level `model.logits(model.encode(ESMProtein(sequence=seq)), LogitsConfig(sequence=True, return_embeddings=True))` API returning `out.logits.sequence` and `out.embeddings`.
 
 - [ ] **Step 3: Run the full unit suite to confirm no regressions**
 
@@ -1048,11 +1048,11 @@ git commit -m "test: end-to-end ESM-C integration (embed/likelihood/score)"
 
 **2. Placeholder scan** — no TBD/TODO; every code step has complete content. The two "fallback" call-outs (Dockerfile compiler, SDK shape mismatch) are explicit, bounded contingencies with concrete remedies, not deferred work — the primary path is fully specified.
 
-**3. Type/name consistency** — checkpoint strings `esmc_300m`/`esmc_600m`, image tags `plms-esm-c:300m`/`:600m`, registry names `esm-c-300m`/`esm-c-600m`, `EMBEDDING_DIM=960`, `model_family="esm-c"`, and helper names (`sanitize_ids`, `read_fasta`, `parse_mutant`, `perplexity_from_mean`, `_truncate`, `build_manifest`, `_embed_one`, `_pseudo_log_likelihood`, `_masked_position_logprobs`, `_wt_position_logprobs`, `_score_variant`) are consistent across the entrypoint, unit tests, Dockerfile, README, and integration test.
+**3. Type/name consistency** — checkpoint strings `esmc_300m`/`esmc_600m`, image tags `protlms-esm-c:300m`/`:600m`, registry names `esm-c-300m`/`esm-c-600m`, `EMBEDDING_DIM=960`, `model_family="esm-c"`, and helper names (`sanitize_ids`, `read_fasta`, `parse_mutant`, `perplexity_from_mean`, `_truncate`, `build_manifest`, `_embed_one`, `_pseudo_log_likelihood`, `_masked_position_logprobs`, `_wt_position_logprobs`, `_score_variant`) are consistent across the entrypoint, unit tests, Dockerfile, README, and integration test.
 
 ## Deviations from the spec (flagged)
 
-1. **Manifest dims via a checkpoint-keyed table**, not derived from the loaded model — keeps `manifest` (and thus `plms.load`) model-load-free; equally drift-proof since the checkpoint name pins the architecture.
+1. **Manifest dims via a checkpoint-keyed table**, not derived from the loaded model — keeps `manifest` (and thus `protlms.load`) model-load-free; equally drift-proof since the checkpoint name pins the architecture.
 2. **`max_sequence_length = 2048`** chosen for the "documented constant" the spec left open (ESM2 uses 1024; ESM-C handles longer context).
 3. **Embed restricted to the final layer (`--layers -1`)** — avoids shipping unverified hidden-state-indexing code; documented in the README. Arbitrary intermediate layers are a possible future enhancement.
 

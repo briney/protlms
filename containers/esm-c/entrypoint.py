@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Contract-compliant entrypoint for the ESM-C model image.
 
-Implements the plms container contract (see docs/CONTRACT.md) for the ESM-C
+Implements the protlms container contract (see docs/CONTRACT.md) for the ESM-C
 masked protein language model via EvolutionaryScale's native ``esm`` SDK. Exposes
 the ``manifest``, ``embed``, ``likelihood``, and ``score`` subcommands plus a
 hidden ``_prefetch`` used at build time to bake weights into the image.
@@ -465,7 +465,7 @@ def _write_capability_result(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="esm-c", description="ESM-C plms contract entrypoint.")
+    parser = argparse.ArgumentParser(prog="esm-c", description="ESM-C protlms contract entrypoint.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("manifest").set_defaults(func=cmd_manifest)

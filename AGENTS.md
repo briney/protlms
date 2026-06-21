@@ -5,7 +5,7 @@ Not specific to any single agent or tool.
 
 ## Project Overview
 
-`plms` is a unified toolkit for running inference across a variety of protein
+`protlms` is a unified toolkit for running inference across a variety of protein
 language models (pLMs). It aims to provide one consistent API for obtaining
 embeddings, sequence likelihoods, and downstream predictions regardless of which
 underlying model (ESM, ProtT5, antibody-specific models, etc.) is used.
@@ -17,7 +17,7 @@ underlying model (ESM, ProtT5, antibody-specific models, etc.) is used.
 
 TODO: Fill in as the project develops. Expected shape: a shared inference
 interface, per-model backend adapters, tokenization/batching utilities, and the
-`plms` CLI (`src/plms/cli.py`) as a thin wrapper over the library.
+`protlms` CLI (`src/protlms/cli.py`) as a thin wrapper over the library.
 
 ## Development Workflow
 

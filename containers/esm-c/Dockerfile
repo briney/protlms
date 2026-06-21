@@ -1,9 +1,9 @@
-# ESM-C model image for the plms container contract.
+# ESM-C model image for the protlms container contract.
 #
 # Build (300M, default / CI):
-#   docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t plms-esm-c:300m containers/esm-c
+#   docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t protlms-esm-c:300m containers/esm-c
 # Build (600M):
-#   docker build --build-arg ESMC_CHECKPOINT=esmc_600m -t plms-esm-c:600m containers/esm-c
+#   docker build --build-arg ESMC_CHECKPOINT=esmc_600m -t protlms-esm-c:600m containers/esm-c
 #
 # Weights are baked in at build time, so runtime needs no network access.
 # The image runs on CPU by default and uses the GPU when launched with --gpus.

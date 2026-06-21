@@ -12,7 +12,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-from plms.exceptions import ContractVersionError
+from protlms.exceptions import ContractVersionError
 
 #: The contract version this client speaks (``MAJOR.MINOR``).
 CONTRACT_VERSION = "0.3"

@@ -1,6 +1,6 @@
 # Design: input chunking (client-side sharding for scale)
 
-> **Status:** Approved design. Completes Phase 1 of the plms roadmap — the
+> **Status:** Approved design. Completes Phase 1 of the protlms roadmap — the
 > "implement input chunking for scale" item. Purely a client-side feature; no
 > contract, container, or image changes.
 
@@ -120,7 +120,7 @@ identical output.
 
 ## Module structure
 
-- **New `src/plms/chunking.py`** owns the feature: `chunk_records(records,
+- **New `src/protlms/chunking.py`** owns the feature: `chunk_records(records,
   chunk_size) -> list[list[FastaRecord]]` (pure split); the orchestration that
   runs/skip-resumes chunks and writes `chunking.json`; and `merge_chunk_outputs`
   per capability. It reuses `io.py` (FASTA/CSV/npz read+write, `read_result`,
@@ -151,7 +151,7 @@ identical output.
 - `chunk_size=None` and single-chunk inputs take the unchanged single-run path
   (no `chunks/` dir created).
 
-**Integration (docker-gated, `@pytest.mark.slow`, `PLMS_RUN_DOCKER_TESTS=1`):**
+**Integration (docker-gated, `@pytest.mark.slow`, `PROTLMS_RUN_DOCKER_TESTS=1`):**
 - `embed` with `chunk_size=2` on `tests/data/tiny.fasta` (3 records → 2 chunks)
   against `esm2-8m`: merged `pooled()` has all 3 ids with shape `(320,)`, and the
   vectors match an unchunked `embed` run within `1e-5`.
@@ -161,10 +161,10 @@ identical output.
 ## Verification
 
 ```bash
-plms embed esm2-8m big.fasta -o out/ --chunk-size 1000
+protlms embed esm2-8m big.fasta -o out/ --chunk-size 1000
 # crash/interrupt, then re-run the same command -> completed chunks are skipped
 pytest                                   # unit (gated integration skipped)
-PLMS_RUN_DOCKER_TESTS=1 pytest -m slow   # chunked == unchunked, end-to-end
+PROTLMS_RUN_DOCKER_TESTS=1 pytest -m slow   # chunked == unchunked, end-to-end
 ruff check src/ tests/ && ruff format --check src/ tests/ && ty check src/
 ```
 

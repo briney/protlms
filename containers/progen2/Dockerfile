@@ -1,9 +1,9 @@
-# ProGen2 model image for the plms container contract.
+# ProGen2 model image for the protlms container contract.
 #
 # Build (small model, ~600 MB weights):
-#   docker build --build-arg PROGEN2_CHECKPOINT=progen2-small -t plms-progen2:small containers/progen2
+#   docker build --build-arg PROGEN2_CHECKPOINT=progen2-small -t protlms-progen2:small containers/progen2
 # Build (base model):
-#   docker build --build-arg PROGEN2_CHECKPOINT=progen2-base -t plms-progen2:base containers/progen2
+#   docker build --build-arg PROGEN2_CHECKPOINT=progen2-base -t protlms-progen2:base containers/progen2
 #
 # Weights are baked in at build time; runtime requires no network access.
 # The image runs on CPU by default and uses the GPU when launched with --gpus.

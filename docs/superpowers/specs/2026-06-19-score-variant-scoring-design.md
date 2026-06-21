@@ -1,6 +1,6 @@
 # Design: `score` (variant effect scoring)
 
-> **Status:** Approved design. Phase 1a of the plms roadmap — the third
+> **Status:** Approved design. Phase 1a of the protlms roadmap — the third
 > masked-LM capability, extending the working ESM2 image. Builds directly on the
 > Phase 0 contract + client.
 
@@ -92,7 +92,7 @@ Group input rows by identical `wt_sequence` to amortize forward passes.
   a `ScoreResult` dataclass with `.rows()` (lazy CSV parse). Reuses the shared
   `_run_capability` helper; the only capability-specific bits are the staged
   input filename (`variants.csv`) and the extra args (`--method`).
-- **`cli.py`** — `plms score MODEL variants.csv -o OUT [--method masked-marginal|wt-marginal] [--gpu/--no-gpu] [--batch-size N]`.
+- **`cli.py`** — `protlms score MODEL variants.csv -o OUT [--method masked-marginal|wt-marginal] [--gpu/--no-gpu] [--batch-size N]`.
 - **`__init__.py`** — export `ScoreResult`.
 
 `_run_capability` currently assumes a FASTA input staged as `seqs.fasta`. It will
@@ -120,14 +120,14 @@ unchanged.
   `CapabilityNotSupportedError` when manifest lacks `score`; `InvalidRequestError`
   for a bad `method` and for a CSV missing columns; correct command construction
   (`score --input /in/variants.csv ... --method ...`).
-- `test_cli.py` — `plms score` invokes `Model.score` and renders a summary;
-  `PlmsError` → clean exit 1.
+- `test_cli.py` — `protlms score` invokes `Model.score` and renders a summary;
+  `ProtlmsError` → clean exit 1.
 - `test_esm2_entrypoint.py` — `parse_mutant("A24G:T56S")` →
   `[("A",24,"G"),("T",56,"S")]`; malformed strings raise; WT-residue mismatch
   detected; self-substitution parses.
 
-**Integration (docker-gated, `@pytest.mark.slow`, `PLMS_RUN_DOCKER_TESTS=1`):**
-- Rebuild `plms-esm2:t6_8M` (now contract 0.2).
+**Integration (docker-gated, `@pytest.mark.slow`, `PROTLMS_RUN_DOCKER_TESTS=1`):**
+- Rebuild `protlms-esm2:t6_8M` (now contract 0.2).
 - `tests/data/variants.csv`: one WT (a short real sequence, e.g. GB1) with a few
   mutants **including a self-substitution** and at least one multi-mutant.
 - Assert: all scores finite; the **self-substitution scores ≈ 0.0** (deterministic
@@ -137,12 +137,12 @@ unchanged.
 ## Verification
 
 ```bash
-docker build --build-arg ESM2_CHECKPOINT=esm2_t6_8M -t plms-esm2:t6_8M containers/esm2
-docker run --rm plms-esm2:t6_8M manifest        # capabilities now include "score"
-plms score esm2-8m tests/data/variants.csv -o out/
-plms score esm2-8m tests/data/variants.csv -o out/ --method wt-marginal --gpu
+docker build --build-arg ESM2_CHECKPOINT=esm2_t6_8M -t protlms-esm2:t6_8M containers/esm2
+docker run --rm protlms-esm2:t6_8M manifest        # capabilities now include "score"
+protlms score esm2-8m tests/data/variants.csv -o out/
+protlms score esm2-8m tests/data/variants.csv -o out/ --method wt-marginal --gpu
 ```
-Then: `pytest` (unit) green; `PLMS_RUN_DOCKER_TESTS=1 pytest -m slow` green;
+Then: `pytest` (unit) green; `PROTLMS_RUN_DOCKER_TESTS=1 pytest -m slow` green;
 `ruff check`, `ruff format --check`, `ty check src/` clean.
 
 ## Out of scope (later sub-projects)

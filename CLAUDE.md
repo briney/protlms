@@ -1,4 +1,4 @@
-# plms
+# protlms
 
 Unified toolkit for inference across a variety of protein language models (pLMs).
 
@@ -19,14 +19,14 @@ ruff format src/ tests/
 ty check src/
 
 # CLI
-plms --help
+protlms --help
 ```
 
 ## Project Structure
 
 ```
-src/plms/           # Main package code
-  cli.py            # Typer-based command-line interface (entry point: `plms`)
+src/protlms/           # Main package code
+  cli.py            # Typer-based command-line interface (entry point: `protlms`)
 tests/              # Test suite (mirrors src structure)
 ```
 
@@ -72,15 +72,15 @@ rationale.
   lets a Docker-SDK runner drop in later without touching the client.
 - `io.py` — FASTA parsing (`read_fasta`), input staging (`stage_inputs`), and
   output parsing (`read_result`, `load_*_embeddings`, `read_likelihoods`).
-- `models.py` — the integration layer: `plms.load(name)` → `Model` with
+- `models.py` — the integration layer: `protlms.load(name)` → `Model` with
   `embed`/`likelihood`, returning `EmbeddingResult`/`LikelihoodResult`. Validates
   requests against the manifest, stages inputs, drives the runner, parses outputs.
-- `exceptions.py` — the `PlmsError` hierarchy.
-- `cli.py` — thin Typer wrapper (`plms models list|embed|likelihood`).
+- `exceptions.py` — the `ProtlmsError` hierarchy.
+- `cli.py` — thin Typer wrapper (`protlms models list|embed|likelihood`).
 
 ### Data flow
 
-`plms.load(name)` resolves the image (`registry`), reads its manifest
+`protlms.load(name)` resolves the image (`registry`), reads its manifest
 (`runner.manifest`), and checks contract compatibility. `model.embed(...)`
 validates the request against the manifest, stages the FASTA into a temp `/in`
 (`io`), builds a `docker run` command (`runner`), executes it, then parses

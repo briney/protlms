@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Contract-compliant entrypoint for the ProGen2 model image.
 
-Implements the plms container contract (docs/CONTRACT.md) for the ProGen2
+Implements the protlms container contract (docs/CONTRACT.md) for the ProGen2
 autoregressive protein language model via a HuggingFace community port loaded
 with trust_remote_code. Exposes manifest / generate / likelihood / _prefetch.
 
@@ -462,7 +462,7 @@ def build_parser() -> argparse.ArgumentParser:
         Configured ArgumentParser with all contract subcommands.
     """
     parser = argparse.ArgumentParser(
-        prog="progen2", description="ProGen2 plms contract entrypoint."
+        prog="progen2", description="ProGen2 protlms contract entrypoint."
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
