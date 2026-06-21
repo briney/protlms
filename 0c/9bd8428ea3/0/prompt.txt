@@ -1,0 +1,241 @@
+We've finished Phases 0-2, but I want to put a pin in Phase 3 (benchmarking) for the time being. First, I'd like to
+  expand the stable of models. I want to start with a few more encoder models, as we've already build tooling for ESM
+  models so these can follow that same pattern. Here are the models I'm interested in: ProtBERT (paper:
+  https://arxiv.org/abs/2007.06225, code: https://github.com/agemagician/ProtTrans#models) and Profluent-E1 (paper:
+  https://www.biorxiv.org/content/10.1101/2025.11.12.688125v1, code: https://github.com/Profluent-AI/E1). Note that E1 can
+  function both in "single sequence" mode or in "retrieval augmented" mode. I'm only interested in single-sequence mode
+  for the time being. make a plan for adding these two models.
+
+---
+
+<task-notification>
+<task-id>a12b50897a60f862e</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-protlms/e137f537-7644-42e8-9e19-f696934a2817/tasks/a12b50897a60f862e.output</output-file>
+<status>completed</status>
+<summary>Agent "Research ProtBERT model" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I have everything I need. The model uses standard BERT special tokens and is a vanilla BERT architecture, so it works with any modern `transformers` version that supports BERT (which is essentially all of them). I have confirmed all six sections. Let me compile the findings.
+
+---
+
+# ProtBERT — Technical Facts for Toolkit Integration
+
+Researched from the ProtTrans paper, the agemagician/ProtTrans GitHub README, and the Rostlab HuggingFace model cards (plus the raw `config.json`, `vocab.txt`, and `special_tokens_map.json` on HuggingFace, which are the authoritative source for exact dimensions).
+
+## 1. ARCHITECTURE
+
+**Confirmed.** ProtBERT is a BERT-style bidirectional encoder trained with masked language modeling (MLM). Each protein sequence is treated as a complete document; **no next-sentence-prediction**; 15% of residues masked (80% `[MASK]`, 10% random, 10% unchanged) — standard BERT MLM.
+
+- Model class: **`BertForMaskedLM`** — this is the value of the `architectures` field in `config.json`.
+- Loadable via HuggingFace `transformers`. The model cards show `BertForMaskedLM`/`BertModel`/`BertTokenizer` explicitly. Because `config.json` declares `architectures: ["BertForMaskedLM"]` and it is a standard BERT, the `Auto*` classes (`AutoModelForMaskedLM`, `AutoTokenizer`, `AutoConfig`, `AutoModel`) all resolve correctly. (Note: the cards' code uses the explicit `Bert*` classes; `Auto*` is equivalent but not literally quoted in the card.)
+- Sources: https://huggingface.co/Rostlab/prot_bert , https://huggingface.co/Rostlab/prot_bert/raw/main/config.json , https://github.com/agemagician/ProtTrans
+
+## 2. CHECKPOINTS
+
+Exact HuggingFace repo ids (both confirmed in the ProtTrans README "Models Availability" table):
+- **`Rostlab/prot_bert`** — trained on **UniRef100** (~217M sequences)
+- **`Rostlab/prot_bert_bfd`** — trained on **BFD** (Big Fantastic Database)
+
+Architecture is identical for both (same `config.json` dimensions):
+
+| Field | Value |
+|---|---|
+| hidden_size (embedding dim) | **1024** |
+| num_hidden_layers | **30** |
+| num_attention_heads | **16** |
+| intermediate_size | **4096** |
+| vocab_size (config) | **30** |
+| max_position_embeddings | **40000** |
+| total parameters | **~420M** |
+
+Notes:
+- **Params: ~420M** (from ProtTrans/Rostlab; consistent with the 1.68 GB fp32 weight file). The arXiv abstract page did not list the per-model count — the 420M figure comes from the model documentation/ProtTrans materials, not the abstract.
+- **Vocab size nuance:** `config.json` says `vocab_size: 30`, but the model card / training docs describe an *effective* vocabulary of **21** (5 special tokens + 20 standard amino acids actively used). The `vocab.txt` actually contains 5 special tokens + 25 letters (the 20 standard AAs plus X, U, B, Z, O) = 30 entries. Use **30** for tensor shapes (the logits dimension), and be aware "21" in prose refers to the actively-trained tokens.
+- **max_position_embeddings is 40000**, which is unusually large. The model was actually *trained* on sequences of length **512** (300k steps) and **2048** (100k steps). So while the position-embedding table technically allows up to 40000, practical/effective max length is ~512–2048; quality degrades well before 40000.
+
+Other variants "worth including": the same paper ships **ProtT5** (`Rostlab/prot_t5_xl_uniref50`, `Rostlab/prot_t5_xl_bfd`), **ProtAlbert** (`Rostlab/prot_albert`), **ProtElectra**, and **ProtXLNet** — but those are different architectures. A community distilled BERT variant **`yarongef/DistilProtBert`** exists. For a "ProtBERT" entry specifically, the two canonical checkpoints are `Rostlab/prot_bert` and `Rostlab/prot_bert_bfd`.
+
+- Sources: https://huggingface.co/Rostlab/prot_bert/raw/main/config.json , https://huggingface.co/Rostlab/prot_bert_bfd/raw/main/config.json , https://github.com/agemagician/ProtTrans
+
+## 3. TOKENIZATION (critical)
+
+**Confirmed on all points.**
+
+- **Space-separated amino acids: YES.** Sequences are "uppercased and tokenized using a single space." The fill-mask example input is literally space-separated: `'D L I P T S S K L V V [MASK] D T S L Q V K K A F F A L V T'`. You must join residues with spaces (e.g. `" ".join(sequence)`) before tokenizing, otherwise the tokenizer treats the whole string as one/unknown token.
+- **Rare AA mapping U, Z, O, B → X via regex: YES.** Exact line from the card:
+  ```python
+  sequence_Example = re.sub(r"[UZOB]", "X", sequence_Example)
+  ```
+- **Special tokens:** `[CLS]`, `[SEP]` added in standard BERT layout: `[CLS] seqA [SEP]` (or `[CLS] seqA [SEP] seqB [SEP]` for pairs). Full special-token set (from `special_tokens_map.json`): `pad_token=[PAD]`, `unk_token=[UNK]`, `cls_token=[CLS]`, `sep_token=[SEP]`, `mask_token=[MASK]`.
+- **Tokenizer init:** `BertTokenizer.from_pretrained("Rostlab/prot_bert", do_lower_case=False)` — `do_lower_case=False` is required (amino acids are uppercase).
+
+Exact feature-extraction snippet from the model card:
+```python
+from transformers import BertModel, BertTokenizer
+import re
+tokenizer = BertTokenizer.from_pretrained("Rostlab/prot_bert", do_lower_case=False)
+model = BertModel.from_pretrained("Rostlab/prot_bert")
+sequence_Example = "A E T C Z A O"
+sequence_Example = re.sub(r"[UZOB]", "X", sequence_Example)
+encoded_input = tokenizer(sequence_Example, return_tensors='pt')
+output = model(**encoded_input)
+```
+- **Max sequence length / max_position_embeddings: 40000** in config; effectively trained at 512 / 2048 (see §2).
+- Sources: https://huggingface.co/Rostlab/prot_bert , https://huggingface.co/Rostlab/prot_bert/raw/main/special_tokens_map.json , https://github.com/agemagician/ProtTrans
+
+## 4. CAPABILITIES
+
+- **(a) Per-residue embeddings via `output_hidden_states`: YES.** Standard BERT — call `model(**inputs, output_hidden_states=True)` or use `last_hidden_state` from `BertModel`, shape `(B, L, 1024)`. Strip the `[CLS]`/`[SEP]` positions to get per-residue vectors.
+- **(b) Pooled embeddings (mean / CLS): YES.** Mean-pool `last_hidden_state` over real residue positions, or take the `[CLS]` token (index 0). (Note: BERT's `pooler_output` exists but is the tanh-projected CLS; for proteins mean-pooling is the common choice.)
+- **(c) Per-position amino-acid logits for masked-marginal pseudo-log-likelihood: YES.** `BertForMaskedLM` outputs logits of shape `(B, L, 30)` over the vocab, which is exactly what masked-marginal / pseudo-perplexity scoring needs.
+- **(d) Variant effect scores: YES, derivable** (not a built-in head). Compute via masked-marginal scoring from the MLM logits (log-ratio of mutant vs. wild-type residue probability at the masked position) — the standard ESM-style approach. ProtBERT provides the logits; the scoring logic is yours to implement.
+- **Mask token for masked-marginal scoring: YES.** `mask_token = "[MASK]"`. A `fill-mask` pipeline is demonstrated in the card, confirming the MLM head and mask token work out of the box.
+- Sources: https://huggingface.co/Rostlab/prot_bert , https://huggingface.co/Rostlab/prot_bert/raw/main/special_tokens_map.json
+
+## 5. DEPENDENCIES
+
+- **transformers / torch versions:** Neither model card nor the ProtTrans README pins exact versions — **not explicitly specified in the sources** (stated rather than guessed). However, ProtBERT is a *vanilla* `BertForMaskedLM` with no custom modeling code, so it works with effectively any modern `transformers` (4.x) on `torch` 1.x/2.x. For a reproducible Docker pin, a safe known-good combination is `transformers&gt;=4.30,&lt;5` with `torch&gt;=2.0` (these support standard BERT without issue); validate against your chosen image rather than treating this as a card-sourced requirement.
+- **CPU: YES.** Runs fine on CPU. Unlike the ProtT5 models, there's no fp16 caveat for BERT inference; keep it in fp32 on CPU (`model.to(torch.float32)`). It is a 420M-param model, so CPU inference on long sequences is slow but functional.
+- **Size on disk:** `pytorch_model.bin` is **~1.68 GB** (fp32). No `safetensors`/`tf`/`flax` files in the main repo — only the PyTorch `.bin`. Budget ~1.7 GB per checkpoint for baking into an image (so ~3.4 GB if you bake both `prot_bert` and `prot_bert_bfd`).
+- Sources: https://huggingface.co/Rostlab/prot_bert/tree/main , https://huggingface.co/Rostlab/prot_bert
+
+## 6. LICENSE
+
+- **Academic Free License v3.0 (AFL-3.0)** — stated in the ProtTrans GitHub README: "The ProtTrans pretrained models are released under the terms of the Academic Free License v3.0." This is a permissive license (allows commercial use, modification, distribution with attribution).
+- **Gating / access restrictions: NONE found.** No gated-access flag or click-through agreement on the `Rostlab/prot_bert` or `Rostlab/prot_bert_bfd` HuggingFace pages — they download without authentication.
+- Sources: https://github.com/agemagician/ProtTrans , https://huggingface.co/Rostlab/prot_bert
+
+---
+
+## Quick integration summary
+ProtBERT = standard `BertForMaskedLM`, 30 layers / hidden 1024 / 16 heads / ~420M params, vocab dim 30. Two checkpoints: `Rostlab/prot_bert` (UniRef100) and `Rostlab/prot_bert_bfd` (BFD). **The two must-not-miss preprocessing steps:** (1) `re.sub(r"[UZOB]", "X", seq)`, then (2) space-join residues before tokenizing with `do_lower_case=False`. Supports per-residue + pooled embeddings, MLM logits for pseudo-log-likelihood/variant scoring, and `[MASK]`-based masked-marginal scoring. CPU-capable, ~1.68 GB per checkpoint, AFL-3.0, ungated.
+
+**One open item to verify yourself:** exact transformers/torch version pins are not documented by the source — choose and test a pin for the Docker image rather than relying on a card-stated version.</result>
+<usage><subagent_tokens>28195</subagent_tokens><tool_uses>14</tool_uses><duration_ms>113395</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a81625d0a6eec38a7</task-id>
+<tool-use-id>toolu_016Brnq7JddcXRMqqxYZZURX</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-protlms/e137f537-7644-42e8-9e19-f696934a2817/tasks/a81625d0a6eec38a7.output</output-file>
+<status>completed</status>
+<summary>Agent "Research Profluent-E1 model" came to rest</summary>
+<note>A task-notification fires each time this agent comes to rest with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I now have all the facts verified from primary sources. Here is the structured summary.
+
+# Profluent-E1 — Technical Findings
+
+Sources used: the bioRxiv paper abstract/metadata (DOI `10.1101/2025.11.12.688125`), the GitHub repo `https://github.com/Profluent-AI/E1` (README + `src/E1/` source), and the HuggingFace `Profluent-Bio/E1-{150m,300m,600m}` config/API. The biorxiv full-text HTML is 403-blocked to fetchers; the PDF (`.../v1.full.pdf`) and JATS XML are available if deeper paper detail is needed, but the abstract plus the open-source code already answer everything below.
+
+## 1. ARCHITECTURE — Encoder (MLM), not autoregressive
+
+E1 is a **bidirectional encoder / masked language model**, explicitly positioned as a "drop-in replacement for the ESM family." The model class is `E1ForMaskedLM` and prediction uses a `?` mask token.
+
+Backbone is a custom transformer (NOT vanilla BERT/ESM), confirmed by the HF `config.json`:
+- Objective/attention: **block-causal multi-sequence attention** for retrieval — quoting the paper abstract: "By integrating retrieved evolutionary context through block-causal multi-sequence attention, E1 captures both general and family-specific constraints without fine-tuning."
+- Architectural features from config: `hidden_act: "silu"`, `gated_mlp: true` (SwiGLU-style FFN), RMSNorm (`rms_norm_eps`), RoPE with **two separate position systems** — `rope_theta_within_seq: 10000` and `rope_theta_global: 500000`, `clip_qkv: 8`, and **`global_attention_every_n_layers: 3`** (a local/global attention interleave, similar in spirit to ModernBERT). `tie_word_embeddings: false`.
+- Source files confirming the custom stack: `src/E1/model/attention.py`, `ffn.py`, `flash_attention.py`, `flex_attention.py`, `varlen_flex_attention.py`.
+
+The paper motivates this as fixing "parameter inefficiencies... baked-in phylogenetic biases, and functional performance issues" of single-sequence pLMs. Trained on **four trillion tokens from the Profluent Protein Atlas**.
+
+## 2. SINGLE-SEQUENCE vs RETRIEVAL-AUGMENTED
+
+Both modes use the **same model and the same input string**; the only difference is whether you prepend homologs, comma-separated:
+- Single-sequence: `"AAAAA?C"` (one sequence, `?` = optional mask)
+- Retrieval-augmented: `"MFCATEEKL,MCCASDF,MFCC?SEF"` (homologs prepended, comma-separated; the **last** comma-separated entry is the query). The `sequence_ids` from the batch preparer track which residues belong to which sequence; the query is selected via `sequence_ids == sequence_ids.max()`.
+
+Minimal single-sequence call (low-level, verbatim from README, file `README.md`):
+```python
+import torch
+from E1.batch_preparer import E1BatchPreparer
+from E1.modeling import E1ForMaskedLM
+
+model = E1ForMaskedLM.from_pretrained("Profluent-Bio/E1-300m").to("cuda:0")
+model.eval()
+
+sequences = ["AAAAA?C"]                      # single-sequence mode
+batch_preparer = E1BatchPreparer()
+batch = batch_preparer.get_batch_kwargs(sequences, device="cuda:0")
+
+with torch.autocast("cuda", dtype=torch.bfloat16, enabled=True):
+    outputs = model(
+        input_ids=batch["input_ids"],
+        within_seq_position_ids=batch["within_seq_position_ids"],
+        global_position_ids=batch["global_position_ids"],
+        sequence_ids=batch["sequence_ids"],
+        past_key_values=None, use_cache=False,
+        output_attentions=False, output_hidden_states=False,
+    )
+logits = outputs.logits          # (B, L, V)
+embeddings = outputs.embeddings  # (B, L, E)
+```
+
+Higher-level helpers (files `src/E1/predictor.py`, `src/E1/scorer.py`):
+- `E1Predictor(model).predict(sequences, ..., context_seqs=None)` yields dicts with `"token_embeddings"` and `"mean_token_embeddings"` (mean-pool). `context_seqs` is the retrieval hook; omit it for single-sequence.
+- `E1Scorer(model, method, ...).score(parent_sequence, sequences, ..., context_seqs=None, context_reduction="mean")` for variant scoring.
+
+CLI tools also exist: `src/E1/tools/predict.py` and `src/E1/tools/score.py`. Cookbook notebooks: `cookbook/basic.ipynb`, `embedding.ipynb`, `zero_shot_fitness_prediction.ipynb`, `site_saturation_mutagenesis.ipynb`.
+
+## 3. DISTRIBUTION — HuggingFace, three sizes, custom code required
+
+On HuggingFace Hub under the **`Profluent-Bio`** org (not "Profluent-AI"), **not gated** (`gated: False` for all three):
+
+| Repo id | Params (safetensors total) | hidden_size | layers | heads | intermediate |
+|---|---|---|---|---|---|
+| `Profluent-Bio/E1-150m` | 154,423,330 | 768 | 20 | 12 | 2304 |
+| `Profluent-Bio/E1-300m` | 274,317,346 | 1024 | 20 | 16 | 3072 |
+| `Profluent-Bio/E1-600m` | 641,438,754 | 1280 | 30 | 20 | 3840 |
+
+Loading: requires the **custom `E1` package** (`E1ForMaskedLM.from_pretrained(...)`). The HF config has `architectures: ["E1ForMaskedLM"]`, `model_type: "E1"`, and **no `auto_map`**, so it does NOT load via plain `transformers.AutoModel`/`trust_remote_code`. (Community re-uploads exist at `Synthyra/Profluent-E1-{150M,300M,600M}` but the official path is the custom package.)
+
+## 4. CAPABILITIES — all four
+
+- (a) **Per-residue embeddings**: yes — `outputs.embeddings` `(B, L, E)`; `predictor` field `"token_embeddings"`.
+- (b) **Pooled embeddings**: yes — mean-pool via `"mean_token_embeddings"` (`embeddings[i, token_mask[i]].mean(dim=0)`).
+- (c) **Per-position AA likelihoods / pseudo-log-likelihood**: yes — `outputs.logits` `(B, L, V)`; `E1Scorer` supports `MASKED_MARGINAL` (mask each position) and `WILDTYPE_MARGINAL` methods.
+- (d) **Variant effect scores**: yes — `E1Scorer.score(parent_sequence, variant_sequences, ...)` returns per-variant log-likelihood-ratio scores (sum of per-mutated-position log-probs); paper cites SOTA zero-shot fitness and unsupervised contact-map prediction.
+
+Embedding dim = `hidden_size` per checkpoint (768 / 1024 / 1280); layers = 20 / 20 / 30 (table above). Vocab/logit dimension V = 34.
+
+## 5. DEPENDENCIES &amp; HARDWARE
+
+From `pyproject.toml`:
+- **Python**: `&gt;=3.12, &lt;3.14`
+- **torch**: `&gt;=2.7.0, &lt;2.9.0`
+- **transformers**: `&lt;4.57.0` (config was saved with 4.56.2); plus `tokenizers`, `kernels`, `einops`, `pandas`, `polars`, `biotite`, `scipy`, `tqdm`, `click`, `psutil`, `ipykernel`. Dev: `pre-commit`, `pytest-xdist`, `mypy`.
+- **flash-attn**: optional — `pip3 install flash-attn --no-build-isolation` (needs CUDA capability 8.0+ / Ampere+). Repo also ships `flex_attention` fallbacks.
+- Platforms declared: `linux-64`, `osx-arm64`.
+
+Install: `git clone https://github.com/Profluent-AI/E1.git &amp;&amp; cd E1 &amp;&amp; pip3 install -e .`
+
+GPU vs CPU: **GPU recommended** (BF16 on CUDA cap. 8.0+, e.g. L40/A100/H100). CPU works but is slower (no flash-attn).
+
+## 6. TOKENIZATION
+
+Tokenizer is a HuggingFace `tokenizers` `tokenizer.json` (file `src/E1/tokenizer.json`), wrapped by `src/E1/tokenizer.py` + `E1BatchPreparer`. **Vocab size 34**, full vocab (id : token):
+- Special: `0=&lt;pad&gt;`, `1=&lt;bos&gt;`, `2=&lt;eos&gt;`, `3=&lt;bos_glm&gt;`, `4=&lt;eos_span&gt;`, **`5='?'` (mask token)**
+- Two extra symbols: `6='1'`, `7='2'`
+- Amino acids (ids 8–33): `A B C D E F G H I J K L M N O P Q R S T U V W X Y Z` (full 26-letter set incl. ambiguity/non-standard B, J, O, U, X, Z)
+
+Input formatting: **no spaces** between residues (plain sequence string); `?` marks masked positions; commas separate homologs in retrieval mode; the preparer auto-adds boundary tokens (use `batch_preparer.get_boundary_token_mask(...)` to exclude them). `pad_token_id=0`, `bos_token_id=1`, `eos_token_id=2`.
+
+Max sequence length: per-sequence (`within_seq`) supports up to **8192** positions (`max_num_positions_within_seq`), with a **global** context budget of **65536** positions (`max_num_positions_global`) across up to **512 sequences** (`max_num_sequences`) — i.e., the homolog+query stack can total 64K tokens.
+
+## 7. LICENSE
+
+- **Code**: Apache License 2.0 (repo `LICENSE`).
+- **Weights**: a custom permissive license (HF tag `license:other`; model card names it **`profluent-e1-clickthrough-license`**) — free for **research and commercial use** with **mandatory attribution** (see repo `NOTICE` and `ATTRIBUTION` files): "You can use, share, and modify Profluent-E1 for free, but you must follow our ATTRIBUTION guidelines." Profluent disclaims responsibility for downstream use and "may terminate your rights... if you breach the license."
+- Flash-attention utility code is adapted under BSD-3-Clause.
+- **HF gating**: NOT gated — all three repos return `gated: False`; no access request required. (One model card surfaced the phrase "clickthrough license," but the Hub API confirms no gating is enforced.)
+- **Paper text** itself is under `cc_by_nc_nd` (non-commercial, no-derivatives) — that applies to the manuscript, not the model/code.
+
+Note: I could not retrieve the verbatim full `NOTICE`/`ATTRIBUTION` text (not fetched), so the exact attribution wording should be read from those repo files before shipping; everything else above is from primary sources.</result>
+<usage><subagent_tokens>33826</subagent_tokens><tool_uses>21</tool_uses><duration_ms>153097</duration_ms></usage>
+</task-notification>
+
+---
+
+Let's go with shared scoring logic (not the model-specific E1Scorer). Everything else looks good.
