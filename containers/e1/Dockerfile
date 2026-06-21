@@ -24,14 +24,18 @@ ENV E1_CHECKPOINT=${E1_CHECKPOINT} \
     PYTHONUNBUFFERED=1
 
 # git is needed for the VCS install; build-essential covers any sdist deps.
+# libnss-wrapper lets the runtime entrypoint shim /etc/passwd for arbitrary UIDs
+# so that torch._inductor (imported by flex_attention) can call getpass.getuser().
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git build-essential \
+    && apt-get install -y --no-install-recommends git build-essential libnss-wrapper \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir "E1 @ git+https://github.com/Profluent-AI/E1.git@${E1_REF}"
 
 WORKDIR /app
 COPY entrypoint.py /app/entrypoint.py
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Bake the checkpoint's weights into the image (populates the HF cache layer).
 RUN python /app/entrypoint.py _prefetch
@@ -39,4 +43,4 @@ RUN python /app/entrypoint.py _prefetch
 # Enforce offline weights at runtime for reproducibility.
 ENV HF_HUB_OFFLINE=1
 
-ENTRYPOINT ["python", "/app/entrypoint.py"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
