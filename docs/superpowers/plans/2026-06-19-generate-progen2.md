@@ -12,7 +12,7 @@
 
 - Python 3.11+; `from __future__ import annotations` in every source module **except `cli.py`**. Client carries **no ML deps** (no torch/transformers/pandas); stdlib `csv`, NumPy only for arrays.
 - Google docstrings on public functions/classes; full type hints; functions < ~50 lines; ruff line length 100; `ruff check`/`ruff format`/`ty check src/` stay clean.
-- `CONTRACT_VERSION = "0.3"`. `src/plms/contract.py` mirrors `docs/CONTRACT.md`.
+- `CONTRACT_VERSION = "0.3"`. `src/protlms/contract.py` mirrors `docs/CONTRACT.md`.
 - New artifact kind: `ArtifactKind.GENERATED_FASTA = "generated_fasta"`.
 - **Neutralized likelihood CSV columns (exact):** `record_id,seq_len,log_likelihood,mean_log_likelihood,perplexity`. The method is recorded in `result.json` `params.likelihood_method` ∈ {`masked_marginal` (ESM2), `causal` (ProGen2)}.
 - `generate` subcommand flags: `--num-samples N --temperature T --top-p P --max-length L --seed S --batch-size N --device cpu|cuda`. Input `prompts.fasta`; **empty sequence = unconditional**. Output `generated.fasta`, headers `{prompt_id}__sample{k}` (k=0..num_samples-1), clean amino-acid sequences (control/special tokens stripped).
@@ -24,7 +24,7 @@
 ### Task 1: Contract — 0.3, generated_fasta kind, fixtures
 
 **Files:**
-- Modify: `src/plms/contract.py`, `tests/data/manifest.example.json`, `tests/data/result.embed.example.json`, `tests/data/result.score.example.json`, `tests/test_contract.py`
+- Modify: `src/protlms/contract.py`, `tests/data/manifest.example.json`, `tests/data/result.embed.example.json`, `tests/data/result.score.example.json`, `tests/test_contract.py`
 - Create: `tests/data/result.generate.example.json`
 
 **Interfaces:**
@@ -67,7 +67,7 @@ Expected: FAIL — `CONTRACT_VERSION` is `"0.2"`; `GENERATED_FASTA` not defined.
 
 - [ ] **Step 3: Implement**
 
-In `src/plms/contract.py` set `CONTRACT_VERSION = "0.3"` and add to `ArtifactKind`:
+In `src/protlms/contract.py` set `CONTRACT_VERSION = "0.3"` and add to `ArtifactKind`:
 
 ```python
     GENERATED_FASTA = "generated_fasta"
@@ -80,7 +80,7 @@ Run: `python -m pytest tests/test_contract.py -q` → PASS. Then `python -m pyte
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/plms/contract.py tests/test_contract.py tests/data/
+git add src/protlms/contract.py tests/test_contract.py tests/data/
 git commit -m "contract: bump to 0.3 and add generated_fasta artifact kind"
 ```
 
@@ -89,7 +89,7 @@ git commit -m "contract: bump to 0.3 and add generated_fasta artifact kind"
 ### Task 2: io — neutralize likelihood columns + read_generated
 
 **Files:**
-- Modify: `src/plms/io.py`, `tests/test_io.py`, `tests/test_models.py`
+- Modify: `src/protlms/io.py`, `tests/test_io.py`, `tests/test_models.py`
 
 **Interfaces:**
 - Consumes: `_artifacts`, `ArtifactKind`, `Result`, `read_fasta`, `FastaRecord` (existing in io).
@@ -123,7 +123,7 @@ def test_read_likelihoods_coerces_numeric_columns(tmp_path: Path) -> None:
 
 
 def test_read_generated(tmp_path: Path) -> None:
-    from plms.io import read_generated
+    from protlms.io import read_generated
 
     (tmp_path / "generated.fasta").write_text(">p__sample0\nACDE\n>p__sample1\nFGHI\n")
     (tmp_path / "result.json").write_text(
@@ -163,7 +163,7 @@ and in `test_likelihood_returns_rows` change `rows[0]["pseudo_perplexity"]` to `
 Run: `python -m pytest tests/test_io.py tests/test_models.py -q`
 Expected: FAIL — `read_generated` missing; `read_likelihoods` still maps `pseudo_*` keys.
 
-- [ ] **Step 3: Implement in `src/plms/io.py`**
+- [ ] **Step 3: Implement in `src/protlms/io.py`**
 
 Change `_LIKELIHOOD_COLUMN_TYPES` to the neutral keys:
 
@@ -198,7 +198,7 @@ Run: `python -m pytest tests/test_io.py tests/test_models.py tests/test_contract
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/plms/io.py tests/test_io.py tests/test_models.py
+git add src/protlms/io.py tests/test_io.py tests/test_models.py
 git commit -m "io: neutralize likelihood columns and add read_generated"
 ```
 
@@ -207,7 +207,7 @@ git commit -m "io: neutralize likelihood columns and add read_generated"
 ### Task 3: models — GenerationResult + Model.generate
 
 **Files:**
-- Modify: `src/plms/models.py`, `src/plms/__init__.py`, `tests/test_models.py`
+- Modify: `src/protlms/models.py`, `src/protlms/__init__.py`, `tests/test_models.py`
 
 **Interfaces:**
 - Consumes: `read_generated`, `stage_inputs`, `read_fasta`/`_read_records`, `Capability.GENERATE`, `RunSpec`.
@@ -251,7 +251,7 @@ def prompts(tmp_path: Path) -> Path:
 
 
 def test_generate_returns_sequences(prompts: Path, tmp_path: Path) -> None:
-    from plms.models import GenerationResult
+    from protlms.models import GenerationResult
 
     model = _load(capabilities=["embed", "likelihood", "generate"])
     result = model.generate(prompts, num_samples=2, output_dir=tmp_path / "gen")
@@ -291,9 +291,9 @@ def test_generate_empty_prompts_raises(tmp_path: Path) -> None:
 Run: `python -m pytest tests/test_models.py -q`
 Expected: FAIL — `Model.generate`/`GenerationResult` missing.
 
-- [ ] **Step 3: Implement in `src/plms/models.py`**
+- [ ] **Step 3: Implement in `src/protlms/models.py`**
 
-Add `read_generated` to the `plms.io` import block. Add the dataclass after `ScoreResult`:
+Add `read_generated` to the `protlms.io` import block. Add the dataclass after `ScoreResult`:
 
 ```python
 @dataclass
@@ -363,7 +363,7 @@ Add the method after `score`:
         return GenerationResult(result=result, output_dir=out_dir, _keepalive=keep)
 ```
 
-`FastaRecord` is already imported under `TYPE_CHECKING`; if not, add `from plms.io import FastaRecord` to that block. In `src/plms/__init__.py`, add `GenerationResult` to the `plms.models` import and `__all__`.
+`FastaRecord` is already imported under `TYPE_CHECKING`; if not, add `from protlms.io import FastaRecord` to that block. In `src/protlms/__init__.py`, add `GenerationResult` to the `protlms.models` import and `__all__`.
 
 - [ ] **Step 4: Run to verify pass**
 
@@ -372,7 +372,7 @@ Run: `python -m pytest tests/test_models.py -q` → PASS; then `python -m pytest
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/plms/models.py src/plms/__init__.py tests/test_models.py
+git add src/protlms/models.py src/protlms/__init__.py tests/test_models.py
 git commit -m "models: add Model.generate and GenerationResult"
 ```
 
@@ -381,10 +381,10 @@ git commit -m "models: add Model.generate and GenerationResult"
 ### Task 4: cli `generate` + registry progen2-small
 
 **Files:**
-- Modify: `src/plms/cli.py`, `src/plms/_data/models.yaml`, `tests/test_cli.py`, `tests/test_registry.py`
+- Modify: `src/protlms/cli.py`, `src/protlms/_data/models.yaml`, `tests/test_cli.py`, `tests/test_registry.py`
 
 **Interfaces:**
-- Produces: `plms generate ...` command; registry resolves `progen2-small`/`progen2_small` → `plms-progen2:small`.
+- Produces: `protlms generate ...` command; registry resolves `progen2-small`/`progen2_small` → `protlms-progen2:small`.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -394,7 +394,7 @@ In `tests/test_registry.py` add:
 def test_resolve_progen2_small() -> None:
     registry = Registry.load()
     entry = registry.resolve("progen2-small")
-    assert entry.image == "plms-progen2:small"
+    assert entry.image == "protlms-progen2:small"
     assert entry.model_family == "progen2"
     assert registry.resolve("progen2_small") == entry
 ```
@@ -405,7 +405,7 @@ In `tests/test_cli.py` add a `generate` method to `FakeModel`, a `prompts` fixtu
     def generate(self, prompts, *, num_samples, temperature, top_p, max_length, seed,
                  output_dir, use_gpu, batch_size):  # noqa: ANN001
         FakeModel.last_call = {"method": "generate", "num_samples": num_samples, "seed": seed}
-        from plms.models import GenerationResult
+        from protlms.models import GenerationResult
 
         return GenerationResult(
             result=_result("generate", [{"path": "generated.fasta", "kind": "generated_fasta"}]),
@@ -421,7 +421,7 @@ def prompts(tmp_path: Path) -> Path:
 
 
 def test_generate_command_invokes_model(prompts: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app, ["generate", "progen2-small", str(prompts), "-o", str(tmp_path / "out"),
               "--num-samples", "4", "--seed", "42"]
@@ -439,16 +439,16 @@ Expected: FAIL — no `generate` command; `progen2-small` not in registry.
 
 - [ ] **Step 3: Implement**
 
-Append to `src/plms/_data/models.yaml`:
+Append to `src/protlms/_data/models.yaml`:
 
 ```yaml
   - name: progen2-small
     aliases: [progen2_small]
-    image: plms-progen2:small
+    image: protlms-progen2:small
     model_family: progen2
 ```
 
-Add to `src/plms/cli.py` after the `score` command:
+Add to `src/protlms/cli.py` after the `score` command:
 
 ```python
 @app.command()
@@ -488,19 +488,19 @@ def generate(
             f"[green]generate[/green] complete: {result.result.n_output_records} sequence(s) "
             f"written to [bold]{output_dir}[/bold]"
         )
-    except PlmsError as exc:
+    except ProtlmsError as exc:
         _fail(exc)
 ```
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `python -m pytest tests/test_cli.py tests/test_registry.py -q` → PASS; `plms --help` lists `generate`; `python -m pytest -q` green.
+Run: `python -m pytest tests/test_cli.py tests/test_registry.py -q` → PASS; `protlms --help` lists `generate`; `python -m pytest -q` green.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/plms/cli.py src/plms/_data/models.yaml tests/test_cli.py tests/test_registry.py
-git commit -m "cli: add plms generate command and register progen2-small"
+git add src/protlms/cli.py src/protlms/_data/models.yaml tests/test_cli.py tests/test_registry.py
+git commit -m "cli: add protlms generate command and register progen2-small"
 ```
 
 ---
@@ -576,7 +576,7 @@ git commit -m "esm2: neutralize likelihood columns; manifest contract 0.3"
 - Create: `containers/progen2/Dockerfile`, `containers/progen2/entrypoint.py`, `containers/progen2/README.md`, `tests/test_progen2_entrypoint.py`
 
 **Interfaces:**
-- Produces a contract-compliant image `plms-progen2:small` exposing `manifest`/`generate`/`likelihood`/`_prefetch`. Pure helper `resolve_hf_id(checkpoint) -> str` and `strip_special_tokens(text) -> str` are unit-testable without torch.
+- Produces a contract-compliant image `protlms-progen2:small` exposing `manifest`/`generate`/`likelihood`/`_prefetch`. Pure helper `resolve_hf_id(checkpoint) -> str` and `strip_special_tokens(text) -> str` are unit-testable without torch.
 
 This task uses Docker. You will iterate against the real HF port until the build + smoke runs succeed — the ProGen2 tokenizer/`generate` API is the one model-specific unknown. Read the `hugohrban/progen2-small` model card/config to confirm the load + generate calls; adapt the concrete code below if the port's API differs, keeping the contract behavior identical.
 
@@ -637,7 +637,7 @@ Expected: FAIL — module file does not exist yet.
 #!/usr/bin/env python
 """Contract-compliant entrypoint for the ProGen2 model image.
 
-Implements the plms container contract (docs/CONTRACT.md) for the ProGen2
+Implements the protlms container contract (docs/CONTRACT.md) for the ProGen2
 autoregressive protein language model via a HuggingFace community port loaded
 with trust_remote_code. Exposes manifest / generate / likelihood / _prefetch.
 
@@ -868,7 +868,7 @@ def cmd_prefetch(_args: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="progen2", description="ProGen2 plms contract entrypoint.")
+    parser = argparse.ArgumentParser(prog="progen2", description="ProGen2 protlms contract entrypoint.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("manifest").set_defaults(func=cmd_manifest)
@@ -917,8 +917,8 @@ if __name__ == "__main__":
 `containers/progen2/Dockerfile` (mirror `containers/esm2/Dockerfile`):
 
 ```dockerfile
-# ProGen2 model image for the plms container contract.
-#   docker build --build-arg PROGEN2_CHECKPOINT=progen2-small -t plms-progen2:small containers/progen2
+# ProGen2 model image for the protlms container contract.
+#   docker build --build-arg PROGEN2_CHECKPOINT=progen2-small -t protlms-progen2:small containers/progen2
 # Weights are baked in at build time; runs CPU by default, GPU with --gpus.
 ARG BASE_IMAGE=pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
 FROM ${BASE_IMAGE}
@@ -947,11 +947,11 @@ ENTRYPOINT ["python", "/app/entrypoint.py"]
 python -m pytest tests/test_progen2_entrypoint.py -q          # pure helpers pass
 ruff check containers/progen2/entrypoint.py tests/test_progen2_entrypoint.py
 ruff format --check containers/progen2/entrypoint.py tests/test_progen2_entrypoint.py
-docker build --build-arg PROGEN2_CHECKPOINT=progen2-small -t plms-progen2:small containers/progen2
-docker run --rm plms-progen2:small manifest        # capabilities ["generate","likelihood"], contract 0.3
+docker build --build-arg PROGEN2_CHECKPOINT=progen2-small -t protlms-progen2:small containers/progen2
+docker run --rm protlms-progen2:small manifest        # capabilities ["generate","likelihood"], contract 0.3
 # smoke generate (write a tiny prompts dir first):
 mkdir -p /tmp/pg/in /tmp/pg/out && printf '>p1\nMAGIC\n>uncond\n\n' > /tmp/pg/in/prompts.fasta
-docker run --rm -v /tmp/pg/in:/in:ro -v /tmp/pg/out:/out:rw plms-progen2:small \
+docker run --rm -v /tmp/pg/in:/in:ro -v /tmp/pg/out:/out:rw protlms-progen2:small \
   generate --input /in/prompts.fasta --output /out --num-samples 2 --seed 1
 cat /tmp/pg/out/generated.fasta    # 4 records, valid AA strings
 ```
@@ -973,7 +973,7 @@ git commit -m "progen2: contract-compliant container (manifest/generate/likeliho
 - Modify: `tests/test_integration_esm2.py`
 
 **Interfaces:**
-- Consumes: `plms.load("progen2-small")` and `plms.load("esm2-8m")` (both contract 0.3).
+- Consumes: `protlms.load("progen2-small")` and `protlms.load("esm2-8m")` (both contract 0.3).
 
 - [ ] **Step 1: Create prompts data**
 
@@ -1003,9 +1003,9 @@ from pathlib import Path
 
 import pytest
 
-import plms
+import protlms
 
-IMAGE = "plms-progen2:small"
+IMAGE = "protlms-progen2:small"
 REPO_ROOT = Path(__file__).parents[1]
 PROMPTS = REPO_ROOT / "tests" / "data" / "prompts.fasta"
 SEQS = REPO_ROOT / "tests" / "data" / "tiny.fasta"
@@ -1021,8 +1021,8 @@ def _docker_available() -> bool:
 pytestmark = [
     pytest.mark.slow,
     pytest.mark.skipif(
-        os.environ.get("PLMS_RUN_DOCKER_TESTS") != "1" or not _docker_available(),
-        reason="set PLMS_RUN_DOCKER_TESTS=1 and ensure a Docker daemon is available",
+        os.environ.get("PROTLMS_RUN_DOCKER_TESTS") != "1" or not _docker_available(),
+        reason="set PROTLMS_RUN_DOCKER_TESTS=1 and ensure a Docker daemon is available",
     ),
 ]
 
@@ -1042,17 +1042,17 @@ def progen2_image() -> str:
 
 
 @pytest.fixture(scope="session")
-def model(progen2_image: str) -> plms.Model:
-    return plms.load("progen2-small")
+def model(progen2_image: str) -> protlms.Model:
+    return protlms.load("progen2-small")
 
 
-def test_manifest_declares_generate_and_likelihood(model: plms.Model) -> None:
+def test_manifest_declares_generate_and_likelihood(model: protlms.Model) -> None:
     caps = {c.value for c in model.manifest.capabilities}
     assert {"generate", "likelihood"} <= caps
     assert model.manifest.pooling_modes == []
 
 
-def test_generate_is_deterministic_with_seed(model: plms.Model, tmp_path: Path) -> None:
+def test_generate_is_deterministic_with_seed(model: protlms.Model, tmp_path: Path) -> None:
     first = model.generate(PROMPTS, num_samples=2, temperature=0.8, top_p=0.9, seed=7,
                            output_dir=tmp_path / "a")
     second = model.generate(PROMPTS, num_samples=2, temperature=0.8, top_p=0.9, seed=7,
@@ -1062,7 +1062,7 @@ def test_generate_is_deterministic_with_seed(model: plms.Model, tmp_path: Path) 
     assert a == b  # same seed => identical output
 
 
-def test_generate_produces_valid_sequences(model: plms.Model, tmp_path: Path) -> None:
+def test_generate_produces_valid_sequences(model: protlms.Model, tmp_path: Path) -> None:
     result = model.generate(PROMPTS, num_samples=2, max_length=64, seed=1,
                             output_dir=tmp_path / "gen")
     seqs = result.sequences()
@@ -1075,7 +1075,7 @@ def test_generate_produces_valid_sequences(model: plms.Model, tmp_path: Path) ->
         assert len(record.sequence) <= 64
 
 
-def test_progen2_likelihood(model: plms.Model, tmp_path: Path) -> None:
+def test_progen2_likelihood(model: protlms.Model, tmp_path: Path) -> None:
     rows = model.likelihood(SEQS, output_dir=tmp_path / "ll").rows()
     assert len(rows) == 3
     for row in rows:
@@ -1088,7 +1088,7 @@ def test_progen2_likelihood(model: plms.Model, tmp_path: Path) -> None:
 In `tests/test_integration_esm2.py`, the `test_likelihood_end_to_end` currently asserts on `pseudo_perplexity`. Change its assertions to the neutral column and check the method param:
 
 ```python
-def test_likelihood_end_to_end(model: plms.Model, tmp_path: Path) -> None:
+def test_likelihood_end_to_end(model: protlms.Model, tmp_path: Path) -> None:
     result = model.likelihood(TINY_FASTA, output_dir=tmp_path / "ll")
     rows = {row["record_id"]: row for row in result.rows()}
     assert set(rows) == EXPECTED_IDS
@@ -1102,9 +1102,9 @@ def test_likelihood_end_to_end(model: plms.Model, tmp_path: Path) -> None:
 - [ ] **Step 4: Rebuild both images and run integration**
 
 ```bash
-docker build --build-arg ESM2_CHECKPOINT=esm2_t6_8M -t plms-esm2:t6_8M containers/esm2
-docker build --build-arg PROGEN2_CHECKPOINT=progen2-small -t plms-progen2:small containers/progen2
-PLMS_RUN_DOCKER_TESTS=1 python -m pytest tests/test_integration_esm2.py tests/test_integration_progen2.py -v
+docker build --build-arg ESM2_CHECKPOINT=esm2_t6_8M -t protlms-esm2:t6_8M containers/esm2
+docker build --build-arg PROGEN2_CHECKPOINT=progen2-small -t protlms-progen2:small containers/progen2
+PROTLMS_RUN_DOCKER_TESTS=1 python -m pytest tests/test_integration_esm2.py tests/test_integration_progen2.py -v
 ```
 Expected: all pass — ESM2 likelihood now reports neutral columns + `masked_marginal`; ProGen2 generation is deterministic under a fixed seed and yields clean AA sequences.
 
@@ -1115,7 +1115,7 @@ ruff check src/ tests/ containers/
 ruff format --check src/ tests/ containers/
 ty check src/
 python -m pytest -q                                   # unit green, integration skipped
-PLMS_RUN_DOCKER_TESTS=1 python -m pytest -q -m slow    # all integration green
+PROTLMS_RUN_DOCKER_TESTS=1 python -m pytest -q -m slow    # all integration green
 ```
 
 - [ ] **Step 6: Commit**

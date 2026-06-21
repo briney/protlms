@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "plms"
+name = "protlms"
 version = "0.1.0"
 description = "Unified toolkit for inference across a variety of protein language models (pLMs)."
 readme = "README.md"
@@ -45,10 +45,10 @@ dev = [
 ]
 
 [project.scripts]
-plms = "plms.cli:main"
+protlms = "protlms.cli:main"
 
 [project.urls]
-Repository = "https://github.com/briney/plms"
+Repository = "https://github.com/briney/protlms"
 
 # --- Tool Configuration ---
 # Everything below configures dev tools. No separate config files needed.
@@ -73,7 +73,7 @@ select = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["plms"]
+known-first-party = ["protlms"]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests annotate fixtures with types (e.g. pathlib.Path) that are convenient to
@@ -92,4 +92,4 @@ markers = [
 python-version = "3.11"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/plms"]
+packages = ["src/protlms"]

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let `plms.load(name)` fetch model images from GHCR on demand, run them pinned to an immutable digest, and ship a manual CI workflow that publishes images and writes the digest back to the registry.
+**Goal:** Let `protlms.load(name)` fetch model images from GHCR on demand, run them pinned to an immutable digest, and ship a manual CI workflow that publishes images and writes the digest back to the registry.
 
 **Architecture:** All new runtime behavior lives behind the existing `Runner` seam: two new primitives (`image_present`, `pull`) plus a module-level `ensure_image` orchestrator that `load()` calls before reading the manifest. The registry gains a `digest` field (runs use `<repo>@<digest>`) and a producer-only `build` block. A `workflow_dispatch` GitHub Action builds/pushes one image and opens a PR pinning its digest.
 
@@ -24,7 +24,7 @@
 ### Task 1: Registry — `digest` + `build` fields and `pinned_ref()`
 
 **Files:**
-- Modify: `src/plms/registry.py`
+- Modify: `src/protlms/registry.py`
 - Test: `tests/test_registry.py`
 
 **Interfaces:**
@@ -39,22 +39,22 @@
 Append to `tests/test_registry.py`:
 
 ```python
-from plms.registry import BuildSpec, ModelEntry
+from protlms.registry import BuildSpec, ModelEntry
 
 
 def _entry(**overrides) -> ModelEntry:
-    data = dict(name="m", image="ghcr.io/briney/plms-esm2:t6_8M", model_family="esm2")
+    data = dict(name="m", image="ghcr.io/briney/protlms-esm2:t6_8M", model_family="esm2")
     data.update(overrides)
     return ModelEntry(**data)
 
 
 def test_pinned_ref_uses_digest_and_strips_tag() -> None:
     entry = _entry(digest="sha256:abc123")
-    assert entry.pinned_ref() == "ghcr.io/briney/plms-esm2@sha256:abc123"
+    assert entry.pinned_ref() == "ghcr.io/briney/protlms-esm2@sha256:abc123"
 
 
 def test_pinned_ref_without_digest_returns_image() -> None:
-    assert _entry().pinned_ref() == "ghcr.io/briney/plms-esm2:t6_8M"
+    assert _entry().pinned_ref() == "ghcr.io/briney/protlms-esm2:t6_8M"
 
 
 def test_pinned_ref_preserves_registry_host_port() -> None:
@@ -81,7 +81,7 @@ Expected: FAIL — `ImportError: cannot import name 'BuildSpec'` / `ModelEntry` 
 
 - [ ] **Step 3: Implement the schema changes**
 
-In `src/plms/registry.py`, change the import line `from pydantic import BaseModel` to:
+In `src/protlms/registry.py`, change the import line `from pydantic import BaseModel` to:
 
 ```python
 from pydantic import BaseModel, field_validator
@@ -141,9 +141,9 @@ Expected: PASS (all, including pre-existing tests).
 - [ ] **Step 5: Lint, type-check, commit**
 
 ```bash
-ruff check src/plms/registry.py tests/test_registry.py && ruff format src/plms/registry.py tests/test_registry.py
+ruff check src/protlms/registry.py tests/test_registry.py && ruff format src/protlms/registry.py tests/test_registry.py
 ty check src/
-git add src/plms/registry.py tests/test_registry.py
+git add src/protlms/registry.py tests/test_registry.py
 git commit -m "registry: add digest + build fields and pinned_ref()"
 ```
 
@@ -152,14 +152,14 @@ git commit -m "registry: add digest + build fields and pinned_ref()"
 ### Task 2: Runner — `ImagePullError`, `image_present`, `pull`
 
 **Files:**
-- Modify: `src/plms/exceptions.py`
-- Modify: `src/plms/runner.py`
+- Modify: `src/protlms/exceptions.py`
+- Modify: `src/protlms/runner.py`
 - Test: `tests/test_runner.py`
 
 **Interfaces:**
 - Consumes: nothing new.
 - Produces:
-  - `ImagePullError(RunnerError)` in `plms.exceptions`.
+  - `ImagePullError(RunnerError)` in `protlms.exceptions`.
   - `Runner` protocol methods `image_present(self, ref: str) -> bool` and `pull(self, ref: str) -> None`.
   - `SubprocessDockerRunner.image_present` (`docker image inspect`) and `.pull` (`docker pull`, raising `ImagePullError` on non-zero).
 
@@ -168,7 +168,7 @@ git commit -m "registry: add digest + build fields and pinned_ref()"
 Append to `tests/test_runner.py` (note: `ImagePullError` import added to the existing exceptions import line):
 
 ```python
-from plms.exceptions import ImagePullError  # add alongside existing imports
+from protlms.exceptions import ImagePullError  # add alongside existing imports
 
 
 def test_image_present_true_on_zero_exit(monkeypatch) -> None:
@@ -196,8 +196,8 @@ def test_pull_success_invokes_docker_pull(monkeypatch) -> None:
         return subprocess.CompletedProcess(argv, returncode=0, stdout="pulled", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    SubprocessDockerRunner().pull("ghcr.io/briney/plms-esm2@sha256:abc")
-    assert captured["argv"] == ["docker", "pull", "ghcr.io/briney/plms-esm2@sha256:abc"]
+    SubprocessDockerRunner().pull("ghcr.io/briney/protlms-esm2@sha256:abc")
+    assert captured["argv"] == ["docker", "pull", "ghcr.io/briney/protlms-esm2@sha256:abc"]
 
 
 def test_pull_nonzero_raises_image_pull_error(monkeypatch) -> None:
@@ -225,7 +225,7 @@ Expected: FAIL — `ImportError: cannot import name 'ImagePullError'` / `Subproc
 
 - [ ] **Step 3: Add the exception**
 
-In `src/plms/exceptions.py`, after the `RunnerError` class (currently lines 34-35), add:
+In `src/protlms/exceptions.py`, after the `RunnerError` class (currently lines 34-35), add:
 
 ```python
 class ImagePullError(RunnerError):
@@ -234,10 +234,10 @@ class ImagePullError(RunnerError):
 
 - [ ] **Step 4: Add the runner primitives**
 
-In `src/plms/runner.py`, change the exceptions import (currently `from plms.exceptions import ImageNotFoundError, RunnerError`) to:
+In `src/protlms/runner.py`, change the exceptions import (currently `from protlms.exceptions import ImageNotFoundError, RunnerError`) to:
 
 ```python
-from plms.exceptions import ImageNotFoundError, ImagePullError, RunnerError
+from protlms.exceptions import ImageNotFoundError, ImagePullError, RunnerError
 ```
 
 Add two methods to the `Runner` protocol (after `def manifest(self, image: str) -> str: ...`):
@@ -283,9 +283,9 @@ Expected: PASS.
 - [ ] **Step 6: Lint, type-check, commit**
 
 ```bash
-ruff check src/plms/runner.py src/plms/exceptions.py tests/test_runner.py && ruff format src/plms/runner.py src/plms/exceptions.py tests/test_runner.py
+ruff check src/protlms/runner.py src/protlms/exceptions.py tests/test_runner.py && ruff format src/protlms/runner.py src/protlms/exceptions.py tests/test_runner.py
 ty check src/
-git add src/plms/runner.py src/plms/exceptions.py tests/test_runner.py
+git add src/protlms/runner.py src/protlms/exceptions.py tests/test_runner.py
 git commit -m "runner: add image_present/pull primitives and ImagePullError"
 ```
 
@@ -294,7 +294,7 @@ git commit -m "runner: add image_present/pull primitives and ImagePullError"
 ### Task 3: Runner — `ensure_image` orchestrator
 
 **Files:**
-- Modify: `src/plms/runner.py`
+- Modify: `src/protlms/runner.py`
 - Test: `tests/test_runner.py`
 
 **Interfaces:**
@@ -306,8 +306,8 @@ git commit -m "runner: add image_present/pull primitives and ImagePullError"
 Append to `tests/test_runner.py`:
 
 ```python
-from plms.exceptions import ImageNotFoundError  # add alongside existing imports
-from plms.runner import ensure_image  # add alongside existing imports
+from protlms.exceptions import ImageNotFoundError  # add alongside existing imports
+from protlms.runner import ensure_image  # add alongside existing imports
 
 
 class _RecordingRunner:
@@ -341,7 +341,7 @@ def test_ensure_image_pulls_when_absent_and_allowed() -> None:
 
 def test_ensure_image_raises_when_absent_and_pull_disabled() -> None:
     runner = _RecordingRunner(present=False)
-    with pytest.raises(ImageNotFoundError, match="plms pull m"):
+    with pytest.raises(ImageNotFoundError, match="protlms pull m"):
         ensure_image(runner, "img@sha256:abc", allow_pull=False, model_name="m")
 
 
@@ -358,7 +358,7 @@ Expected: FAIL — `ImportError: cannot import name 'ensure_image'`.
 
 - [ ] **Step 3: Implement `ensure_image`**
 
-In `src/plms/runner.py`, add this module-level function after the `Runner` protocol class (before `_current_user`):
+In `src/protlms/runner.py`, add this module-level function after the `Runner` protocol class (before `_current_user`):
 
 ```python
 def ensure_image(runner: Runner, ref: str, *, allow_pull: bool, model_name: str) -> None:
@@ -379,7 +379,7 @@ def ensure_image(runner: Runner, ref: str, *, allow_pull: bool, model_name: str)
     if not allow_pull:
         raise ImageNotFoundError(
             f"image {ref!r} for model {model_name!r} is not available locally and "
-            f"pulling is disabled. Run `plms pull {model_name}` or unset PLMS_NO_PULL."
+            f"pulling is disabled. Run `protlms pull {model_name}` or unset PROTLMS_NO_PULL."
         )
     logger.info("pulling image %s for model %s", ref, model_name)
     runner.pull(ref)
@@ -393,9 +393,9 @@ Expected: PASS.
 - [ ] **Step 5: Lint, type-check, commit**
 
 ```bash
-ruff check src/plms/runner.py tests/test_runner.py && ruff format src/plms/runner.py tests/test_runner.py
+ruff check src/protlms/runner.py tests/test_runner.py && ruff format src/protlms/runner.py tests/test_runner.py
 ty check src/
-git add src/plms/runner.py tests/test_runner.py
+git add src/protlms/runner.py tests/test_runner.py
 git commit -m "runner: add ensure_image orchestrator with pull escape hatch"
 ```
 
@@ -404,7 +404,7 @@ git commit -m "runner: add ensure_image orchestrator with pull escape hatch"
 ### Task 4: `load()` auto-pull + pinned-ref runs
 
 **Files:**
-- Modify: `src/plms/models.py`
+- Modify: `src/protlms/models.py`
 - Test: `tests/test_models.py`
 
 **Interfaces:**
@@ -412,7 +412,7 @@ git commit -m "runner: add ensure_image orchestrator with pull escape hatch"
 - Produces:
   - `load(name, *, runner=None, registry=None, allow_pull: bool | None = None) -> Model`.
   - `Model.__init__(self, entry, runner, manifest, image_ref: str)` storing `self._image_ref`; runs use `self._image_ref`.
-  - Env resolution: `allow_pull=None` → `False` iff `PLMS_NO_PULL` is truthy (`1`/`true`/`yes`), else `True`.
+  - Env resolution: `allow_pull=None` → `False` iff `PROTLMS_NO_PULL` is truthy (`1`/`true`/`yes`), else `True`.
 
 - [ ] **Step 1: Update the test `FakeRunner` and write failing tests**
 
@@ -449,8 +449,8 @@ Add after `manifest`:
 Then append these tests to `tests/test_models.py`:
 
 ```python
-from plms.exceptions import ImageNotFoundError  # add alongside existing imports
-from plms.registry import ModelEntry, Registry  # add alongside existing imports
+from protlms.exceptions import ImageNotFoundError  # add alongside existing imports
+from protlms.registry import ModelEntry, Registry  # add alongside existing imports
 
 
 def _registry_with_digest() -> Registry:
@@ -458,7 +458,7 @@ def _registry_with_digest() -> Registry:
         [
             ModelEntry(
                 name="esm2-8m",
-                image="ghcr.io/briney/plms-esm2:t6_8M",
+                image="ghcr.io/briney/protlms-esm2:t6_8M",
                 digest="sha256:abc123",
                 model_family="esm2",
             )
@@ -475,13 +475,13 @@ def test_load_skips_pull_when_image_present() -> None:
 def test_load_pulls_pinned_ref_when_absent() -> None:
     runner = FakeRunner(_manifest_json(), present=False)
     load("esm2-8m", runner=runner, registry=_registry_with_digest())
-    assert runner.pulled == ["ghcr.io/briney/plms-esm2@sha256:abc123"]
+    assert runner.pulled == ["ghcr.io/briney/protlms-esm2@sha256:abc123"]
 
 
 def test_load_runs_manifest_against_pinned_ref() -> None:
     runner = FakeRunner(_manifest_json(), present=True)
     load("esm2-8m", runner=runner, registry=_registry_with_digest())
-    assert runner.manifest_ref == "ghcr.io/briney/plms-esm2@sha256:abc123"
+    assert runner.manifest_ref == "ghcr.io/briney/protlms-esm2@sha256:abc123"
 
 
 def test_load_allow_pull_false_raises_when_absent() -> None:
@@ -491,7 +491,7 @@ def test_load_allow_pull_false_raises_when_absent() -> None:
 
 
 def test_load_env_no_pull_disables_pull(monkeypatch) -> None:
-    monkeypatch.setenv("PLMS_NO_PULL", "1")
+    monkeypatch.setenv("PROTLMS_NO_PULL", "1")
     runner = FakeRunner(_manifest_json(), present=False)
     with pytest.raises(ImageNotFoundError):
         load("esm2-8m", runner=runner)
@@ -504,14 +504,14 @@ Expected: FAIL — `load()` has no `allow_pull` kwarg / `Model.__init__` got une
 
 - [ ] **Step 3: Implement the `load`/`Model` changes**
 
-In `src/plms/models.py`:
+In `src/protlms/models.py`:
 
 Add `import os` to the stdlib imports (after `import logging`).
 
-Change the runner import (currently `from plms.runner import Runner, RunSpec, SubprocessDockerRunner`) to:
+Change the runner import (currently `from protlms.runner import Runner, RunSpec, SubprocessDockerRunner`) to:
 
 ```python
-from plms.runner import Runner, RunSpec, SubprocessDockerRunner, ensure_image
+from protlms.runner import Runner, RunSpec, SubprocessDockerRunner, ensure_image
 ```
 
 Change `Model.__init__` (lines 118-121) to:
@@ -536,10 +536,10 @@ Add this helper just above `def load(` (line 447):
 
 ```python
 def _resolve_allow_pull(allow_pull: bool | None) -> bool:
-    """Resolve pull policy: explicit arg wins, else consult ``PLMS_NO_PULL``."""
+    """Resolve pull policy: explicit arg wins, else consult ``PROTLMS_NO_PULL``."""
     if allow_pull is not None:
         return allow_pull
-    no_pull = os.environ.get("PLMS_NO_PULL", "").strip().lower() in {"1", "true", "yes"}
+    no_pull = os.environ.get("PROTLMS_NO_PULL", "").strip().lower() in {"1", "true", "yes"}
     return not no_pull
 ```
 
@@ -564,7 +564,7 @@ def load(
         runner: The container runner (defaults to a local docker subprocess runner).
         registry: The model registry (defaults to the packaged registry).
         allow_pull: Whether to pull a missing image. ``None`` (default) consults
-            the ``PLMS_NO_PULL`` environment variable.
+            the ``PROTLMS_NO_PULL`` environment variable.
 
     Raises:
         ModelNotFoundError: If the name is unknown.
@@ -590,24 +590,24 @@ Expected: PASS (all, including pre-existing).
 - [ ] **Step 5: Lint, type-check, commit**
 
 ```bash
-ruff check src/plms/models.py tests/test_models.py && ruff format src/plms/models.py tests/test_models.py
+ruff check src/protlms/models.py tests/test_models.py && ruff format src/protlms/models.py tests/test_models.py
 ty check src/
-git add src/plms/models.py tests/test_models.py
-git commit -m "models: auto-pull pinned image on load with PLMS_NO_PULL escape hatch"
+git add src/protlms/models.py tests/test_models.py
+git commit -m "models: auto-pull pinned image on load with PROTLMS_NO_PULL escape hatch"
 ```
 
 ---
 
-### Task 5: CLI — `plms pull` and `--no-pull`
+### Task 5: CLI — `protlms pull` and `--no-pull`
 
 **Files:**
-- Modify: `src/plms/cli.py`
+- Modify: `src/protlms/cli.py`
 - Test: `tests/test_cli.py`
 
 **Interfaces:**
 - Consumes: `ensure_image` (Task 3), `SubprocessDockerRunner` (existing), `Registry` (existing), `load(allow_pull=...)` (Task 4).
 - Produces:
-  - `plms pull <model>` and `plms pull --all`.
+  - `protlms pull <model>` and `protlms pull --all`.
   - `--no-pull` option on `embed`, `likelihood`, `generate`, threading `allow_pull=False` into `load()` (matches the spec; `score` is left untouched, consistent with how Phase 1 handled `--chunk-size`).
 
 - [ ] **Step 1: Write the failing tests**
@@ -615,14 +615,14 @@ git commit -m "models: auto-pull pinned image on load with PLMS_NO_PULL escape h
 Append to `tests/test_cli.py`:
 
 ```python
-from plms.registry import Registry  # add alongside existing imports
+from protlms.registry import Registry  # add alongside existing imports
 
 
 def test_pull_command_pulls_resolved_model(monkeypatch) -> None:
     calls: list[tuple[str, bool, str]] = []
-    monkeypatch.setattr("plms.cli.SubprocessDockerRunner", lambda: object())
+    monkeypatch.setattr("protlms.cli.SubprocessDockerRunner", lambda: object())
     monkeypatch.setattr(
-        "plms.cli.ensure_image",
+        "protlms.cli.ensure_image",
         lambda runner, ref, *, allow_pull, model_name: calls.append((ref, allow_pull, model_name)),
     )
     result = runner.invoke(app, ["pull", "esm2-8m"])
@@ -632,9 +632,9 @@ def test_pull_command_pulls_resolved_model(monkeypatch) -> None:
 
 def test_pull_all_pulls_every_model(monkeypatch) -> None:
     pulled: list[str] = []
-    monkeypatch.setattr("plms.cli.SubprocessDockerRunner", lambda: object())
+    monkeypatch.setattr("protlms.cli.SubprocessDockerRunner", lambda: object())
     monkeypatch.setattr(
-        "plms.cli.ensure_image",
+        "protlms.cli.ensure_image",
         lambda runner, ref, *, allow_pull, model_name: pulled.append(model_name),
     )
     result = runner.invoke(app, ["pull", "--all"])
@@ -654,7 +654,7 @@ def test_embed_no_pull_threads_allow_pull_false(fasta: Path, tmp_path: Path, mon
         captured.update(kw)
         return FakeModel()
 
-    monkeypatch.setattr("plms.cli.load", fake_load)
+    monkeypatch.setattr("protlms.cli.load", fake_load)
     result = runner.invoke(
         app, ["embed", "esm2-8m", str(fasta), "-o", str(tmp_path / "out"), "--no-pull"]
     )
@@ -669,13 +669,13 @@ Expected: FAIL — no `pull` command / `embed` rejects `--no-pull`.
 
 - [ ] **Step 3: Implement the CLI changes**
 
-In `src/plms/cli.py`:
+In `src/protlms/cli.py`:
 
-Change the imports. Replace `from plms.exceptions import InvalidRequestError, PlmsError` with:
+Change the imports. Replace `from protlms.exceptions import InvalidRequestError, ProtlmsError` with:
 
 ```python
-from plms.exceptions import InvalidRequestError, PlmsError
-from plms.runner import SubprocessDockerRunner, ensure_image
+from protlms.exceptions import InvalidRequestError, ProtlmsError
+from protlms.runner import SubprocessDockerRunner, ensure_image
 ```
 
 Add a reusable option after `_ChunkSizeOpt` (line 44):
@@ -710,7 +710,7 @@ def pull(
             console.print(f"pulling [bold]{entry.name}[/bold] ({ref}) …")
             ensure_image(docker_runner, ref, allow_pull=True, model_name=entry.name)
             console.print(f"  [green]ok[/green] {entry.name}")
-    except PlmsError as exc:
+    except ProtlmsError as exc:
         _fail(exc)
 ```
 
@@ -730,10 +730,10 @@ Expected: PASS.
 - [ ] **Step 5: Lint, type-check, commit**
 
 ```bash
-ruff check src/plms/cli.py tests/test_cli.py && ruff format src/plms/cli.py tests/test_cli.py
+ruff check src/protlms/cli.py tests/test_cli.py && ruff format src/protlms/cli.py tests/test_cli.py
 ty check src/
-git add src/plms/cli.py tests/test_cli.py
-git commit -m "cli: add plms pull command and --no-pull flag"
+git add src/protlms/cli.py tests/test_cli.py
+git commit -m "cli: add protlms pull command and --no-pull flag"
 ```
 
 ---
@@ -741,7 +741,7 @@ git commit -m "cli: add plms pull command and --no-pull flag"
 ### Task 6: Migrate `models.yaml` to GHCR refs + `build` blocks
 
 **Files:**
-- Modify: `src/plms/_data/models.yaml`
+- Modify: `src/protlms/_data/models.yaml`
 - Modify: `tests/test_registry.py`
 - Modify: `tests/test_integration_esm2.py`, `tests/test_integration_esmc.py`, `tests/test_integration_progen2.py`
 
@@ -754,49 +754,49 @@ git commit -m "cli: add plms pull command and --no-pull flag"
 In `tests/test_registry.py`, change `test_default_registry_resolves_esm2_8m`'s image assertion to:
 
 ```python
-    assert entry.image == "ghcr.io/briney/plms-esm2:t6_8M"
+    assert entry.image == "ghcr.io/briney/protlms-esm2:t6_8M"
 ```
 
 Run: `pytest tests/test_registry.py::test_default_registry_resolves_esm2_8m -v`
-Expected: FAIL (still `plms-esm2:t6_8M`).
+Expected: FAIL (still `protlms-esm2:t6_8M`).
 
 - [ ] **Step 2: Rewrite `models.yaml`**
 
-Replace the `models:` block in `src/plms/_data/models.yaml` with (digests are intentionally absent until CI publishes; `build` is producer-only metadata ignored by the client):
+Replace the `models:` block in `src/protlms/_data/models.yaml` with (digests are intentionally absent until CI publishes; `build` is producer-only metadata ignored by the client):
 
 ```yaml
 models:
   - name: esm2-8m
     aliases: [esm2_t6_8M]
-    image: ghcr.io/briney/plms-esm2:t6_8M
+    image: ghcr.io/briney/protlms-esm2:t6_8M
     model_family: esm2
     build:
       context: containers/esm2
       args: { ESM2_CHECKPOINT: esm2_t6_8M }
   - name: esm2-650m
     aliases: [esm2_t33_650M]
-    image: ghcr.io/briney/plms-esm2:t33_650M
+    image: ghcr.io/briney/protlms-esm2:t33_650M
     model_family: esm2
     build:
       context: containers/esm2
       args: { ESM2_CHECKPOINT: esm2_t33_650M }
   - name: progen2-small
     aliases: [progen2_small]
-    image: ghcr.io/briney/plms-progen2:small
+    image: ghcr.io/briney/protlms-progen2:small
     model_family: progen2
     build:
       context: containers/progen2
       args: { PROGEN2_CHECKPOINT: progen2-small }
   - name: esm-c-300m
     aliases: [esmc_300m]
-    image: ghcr.io/briney/plms-esm-c:300m
+    image: ghcr.io/briney/protlms-esm-c:300m
     model_family: esm-c
     build:
       context: containers/esm-c
       args: { ESMC_CHECKPOINT: esmc_300m }
   - name: esm-c-600m
     aliases: [esmc_600m]
-    image: ghcr.io/briney/plms-esm-c:600m
+    image: ghcr.io/briney/protlms-esm-c:600m
     model_family: esm-c
     build:
       context: containers/esm-c
@@ -811,26 +811,26 @@ These tests build the image locally; they must pin to the GHCR tag and pass `all
 
 `tests/test_integration_esm2.py`:
 ```python
-IMAGE = "ghcr.io/briney/plms-esm2:t6_8M"
+IMAGE = "ghcr.io/briney/protlms-esm2:t6_8M"
 ```
 ```python
-    return plms.load("esm2-8m", allow_pull=False)
+    return protlms.load("esm2-8m", allow_pull=False)
 ```
 
 `tests/test_integration_esmc.py`:
 ```python
-IMAGE = "ghcr.io/briney/plms-esm-c:300m"
+IMAGE = "ghcr.io/briney/protlms-esm-c:300m"
 ```
 ```python
-    return plms.load("esm-c-300m", allow_pull=False)
+    return protlms.load("esm-c-300m", allow_pull=False)
 ```
 
 `tests/test_integration_progen2.py`:
 ```python
-IMAGE = "ghcr.io/briney/plms-progen2:small"
+IMAGE = "ghcr.io/briney/protlms-progen2:small"
 ```
 ```python
-    return plms.load("progen2-small", allow_pull=False)
+    return protlms.load("progen2-small", allow_pull=False)
 ```
 
 - [ ] **Step 4: Run the fast suite to verify it passes**
@@ -843,7 +843,7 @@ Expected: PASS. (The integration tests are `slow`+docker-gated and won't run her
 ```bash
 ruff check tests/ && ruff format tests/
 ty check src/
-git add src/plms/_data/models.yaml tests/test_registry.py tests/test_integration_esm2.py tests/test_integration_esmc.py tests/test_integration_progen2.py
+git add src/protlms/_data/models.yaml tests/test_registry.py tests/test_integration_esm2.py tests/test_integration_esmc.py tests/test_integration_progen2.py
 git commit -m "registry: point models.yaml at GHCR images with build metadata"
 ```
 
@@ -880,7 +880,7 @@ SAMPLE = """\
 models:
   - name: esm2-8m
     aliases: [esm2_t6_8M]
-    image: ghcr.io/briney/plms-esm2:t6_8M
+    image: ghcr.io/briney/protlms-esm2:t6_8M
     model_family: esm2
     build:
       context: containers/esm2
@@ -896,7 +896,7 @@ def _yaml(tmp_path: Path) -> Path:
 
 def test_lookup_build_returns_image_context_args(tmp_path: Path) -> None:
     image, context, args = lookup_build(_yaml(tmp_path), "esm2-8m")
-    assert image == "ghcr.io/briney/plms-esm2:t6_8M"
+    assert image == "ghcr.io/briney/protlms-esm2:t6_8M"
     assert context == "containers/esm2"
     assert args == {"ESM2_CHECKPOINT": "esm2_t6_8M"}
 
@@ -1048,7 +1048,7 @@ git commit -m "scripts: add registry_publish lookup/set-digest helpers"
 - Create: `.github/workflows/publish-image.yaml`
 
 **Interfaces:**
-- Consumes: `scripts/registry_publish.py` (Task 7); `src/plms/_data/models.yaml` (Task 6).
+- Consumes: `scripts/registry_publish.py` (Task 7); `src/protlms/_data/models.yaml` (Task 6).
 - Produces: a `workflow_dispatch` action that builds+pushes one model image to GHCR and opens a PR pinning its digest.
 
 - [ ] **Step 1: Create the workflow**
@@ -1072,7 +1072,7 @@ permissions:
   pull-requests: write
 
 env:
-  MODELS_YAML: src/plms/_data/models.yaml
+  MODELS_YAML: src/protlms/_data/models.yaml
 
 jobs:
   publish:
@@ -1170,8 +1170,8 @@ Create `tests/test_integration_ghcr.py`:
 ```python
 """Opt-in end-to-end test of GHCR pull + run.
 
-Runs only when PLMS_RUN_GHCR_TESTS=1 and docker is available. It removes the
-esm2-8m image locally, then `plms.load` with auto-pull enabled, proving the
+Runs only when PROTLMS_RUN_GHCR_TESTS=1 and docker is available. It removes the
+esm2-8m image locally, then `protlms.load` with auto-pull enabled, proving the
 client fetches the published image from GHCR and runs it.
 """
 
@@ -1183,8 +1183,8 @@ import subprocess
 
 import pytest
 
-import plms
-from plms.registry import Registry
+import protlms
+from protlms.registry import Registry
 
 
 def _docker_available() -> bool:
@@ -1196,8 +1196,8 @@ def _docker_available() -> bool:
 pytestmark = [
     pytest.mark.slow,
     pytest.mark.skipif(
-        os.environ.get("PLMS_RUN_GHCR_TESTS") != "1" or not _docker_available(),
-        reason="set PLMS_RUN_GHCR_TESTS=1 with docker available to run GHCR pull tests",
+        os.environ.get("PROTLMS_RUN_GHCR_TESTS") != "1" or not _docker_available(),
+        reason="set PROTLMS_RUN_GHCR_TESTS=1 with docker available to run GHCR pull tests",
     ),
 ]
 
@@ -1205,7 +1205,7 @@ pytestmark = [
 def test_load_pulls_published_image_from_ghcr() -> None:
     ref = Registry.load().resolve("esm2-8m").pinned_ref()
     subprocess.run(["docker", "image", "rm", "-f", ref], capture_output=True)
-    model = plms.load("esm2-8m", allow_pull=True)
+    model = protlms.load("esm2-8m", allow_pull=True)
     assert model.manifest.model_family == "esm2"
 ```
 
@@ -1229,4 +1229,4 @@ git commit -m "test: opt-in GHCR pull+run integration test"
 - [ ] Run the full fast suite: `pytest -m "not slow"` → all pass.
 - [ ] `ruff check src/ tests/ scripts/` and `ruff format --check src/ tests/ scripts/` → clean.
 - [ ] `ty check src/` → clean.
-- [ ] Confirm `plms pull --help`, `plms embed --help` show the new options.
+- [ ] Confirm `protlms pull --help`, `protlms embed --help` show the new options.

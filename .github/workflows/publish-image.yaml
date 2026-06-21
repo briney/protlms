@@ -14,7 +14,7 @@ permissions:
   pull-requests: write
 
 env:
-  MODELS_YAML: src/plms/_data/models.yaml
+  MODELS_YAML: src/protlms/_data/models.yaml
 
 jobs:
   publish:

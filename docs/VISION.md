@@ -1,4 +1,4 @@
-# plms — Vision
+# protlms — Vision
 
 > **Status:** Draft / source of truth for the high-level vision. Decisions captured
 > here reflect deliberate choices; sections marked _(proposed)_ are sensible
@@ -6,7 +6,7 @@
 
 ## Mission
 
-`plms` is a lightweight, pip-installable Python package and CLI that provides a
+`protlms` is a lightweight, pip-installable Python package and CLI that provides a
 **single, unified interface for inference across many protein language models
 (pLMs)** — so embeddings, likelihoods, variant-effect scores, and generated
 sequences can be obtained the same way regardless of the underlying model.
@@ -27,7 +27,7 @@ swapping one model for another means rewriting glue code, and benchmarking
 across models is an exercise in dependency-hell archaeology and irreproducible
 one-off scripts.
 
-## What `plms` Is
+## What `protlms` Is
 
 - A **lightweight client / orchestrator**. It presents one consistent API and
   CLI and hides every model-specific detail behind a standardized boundary.
@@ -36,11 +36,11 @@ one-off scripts.
 - Each model is shipped as a **fully standalone Docker image** — its own
   dependency stack *and its weights* baked in. The image is the unit of
   versioning and reproducibility.
-- `plms` talks to these images through a **standardized container contract**
+- `protlms` talks to these images through a **standardized container contract**
   (see below). Adding a model means publishing a contract-compliant image, not
   changing the client.
 
-## What `plms` Is Not (Non-Goals)
+## What `protlms` Is Not (Non-Goals)
 
 - **Not** a training or fine-tuning framework — inference only.
 - **Not** a place where ML dependencies or model weights live inside the Python
@@ -51,7 +51,7 @@ one-off scripts.
   trivial, but the harness itself is a later phase.
 - **Not** specialized for antibody or other domain-specific models. Antibody
   language models carry their own complexities (paired vs. unpaired chains,
-  numbering schemes, region-aware features) that would broaden scope. `plms`
+  numbering schemes, region-aware features) that would broaden scope. `protlms`
   deliberately targets **general** protein language models and aims to do that
   one job very well.
 
@@ -76,7 +76,7 @@ one-off scripts.
         │
         ▼
   ┌───────────────┐     reads manifest, builds `docker run`,
-  │  plms client  │ ──▶ mounts I/O, parses outputs, surfaces errors
+  │  protlms client  │ ──▶ mounts I/O, parses outputs, surfaces errors
   └───────────────┘
         │ Docker SDK (local daemon)
         ▼
@@ -89,7 +89,7 @@ one-off scripts.
   └──────────────────────────────────────────┘
 ```
 
-### The Client (`plms` package)
+### The Client (`protlms` package)
 
 - **Dependencies (intended):** Docker SDK, `pydantic`, `typer`, `rich`,
   `pyyaml`, and `numpy` (only to load result arrays). Explicitly **no** deep-
@@ -110,7 +110,7 @@ one-off scripts.
 
 ### Orchestration
 
-`plms` drives the **local Docker daemon** via the Docker SDK:
+`protlms` drives the **local Docker daemon** via the Docker SDK:
 
 1. Resolve a model name to an image reference.
 2. Ensure the image is present (v1: built locally from in-tree Dockerfiles).
@@ -138,21 +138,21 @@ validates requests before launching a container.
 **Illustrative** Python and CLI surface _(provisional)_:
 
 ```python
-import plms
+import protlms
 
-model = plms.load("esm2-650m")                       # resolves & checks the image
+model = protlms.load("esm2-650m")                       # resolves & checks the image
 emb   = model.embed("seqs.fasta", pooling="mean")    # -> array handle
 ll    = model.likelihood("seqs.fasta")               # -> per-sequence scores
 vfx   = model.score("variants.csv")                  # -> variant-effect table
-gen   = plms.load("progen2").generate("prompts.fasta", num_samples=10)
+gen   = protlms.load("progen2").generate("prompts.fasta", num_samples=10)
 ```
 
 ```bash
-plms models list
-plms embed     esm2-650m seqs.fasta     -o out/ --pooling mean
-plms likelihood esm2-650m seqs.fasta    -o out/
-plms score     esm2-650m variants.csv   -o out/
-plms generate  progen2   prompts.fasta  -o out/ --num-samples 10
+protlms models list
+protlms embed     esm2-650m seqs.fasta     -o out/ --pooling mean
+protlms likelihood esm2-650m seqs.fasta    -o out/
+protlms score     esm2-650m variants.csv   -o out/
+protlms generate  progen2   prompts.fasta  -o out/ --num-samples 10
 ```
 
 ## The Container Contract
@@ -218,12 +218,12 @@ even though v1 targets moderate sizes:
 ## Repository Layout
 
 ```
-plms/
+protlms/
 ├── pyproject.toml
 ├── docs/
 │   └── VISION.md
-├── src/plms/              # lightweight client (no ML deps)
-│   ├── cli.py             # Typer entry point (`plms`)
+├── src/protlms/              # lightweight client (no ML deps)
+│   ├── cli.py             # Typer entry point (`protlms`)
 │   ├── registry.py        # model name → image resolution
 │   ├── contract.py        # manifest schema + I/O conventions
 │   ├── runner.py          # Docker lifecycle, mounts, chunking
@@ -239,7 +239,7 @@ plms/
 
 `containers/` is versioned alongside the client so the contract evolves in
 lockstep, but it is excluded from the installed package to keep
-`pip install plms` lightweight.
+`pip install protlms` lightweight.
 
 ## First Models
 
@@ -257,7 +257,7 @@ hide cleanly behind the contract.
 ## Roadmap
 
 - **Phase 0 — Contract + skeleton.** Lock the container contract spec, build the
-  `plms` client skeleton, and get **one model (ESM2)** working end-to-end with a
+  `protlms` client skeleton, and get **one model (ESM2)** working end-to-end with a
   locally built image.
 - **Phase 1 — Generalize.** Add ESM-C and ProGen2; finalize the contract across
   all four capabilities; implement input chunking for scale.

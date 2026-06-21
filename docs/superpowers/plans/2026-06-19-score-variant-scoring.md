@@ -14,7 +14,7 @@
 - Client carries **no ML dependencies** (no torch/transformers/pandas/biopython). NumPy only to load arrays; stdlib `csv` for CSV.
 - Google-style docstrings on public functions/classes; full type hints; functions < ~50 lines.
 - `ruff check`, `ruff format`, `ty check src/` must stay clean. Line length 100. Tests mirror `src/` layout under `tests/`.
-- Contract schemas in `src/plms/contract.py` mirror `docs/CONTRACT.md` exactly; edit together. `CONTRACT_VERSION` is `MAJOR.MINOR`.
+- Contract schemas in `src/protlms/contract.py` mirror `docs/CONTRACT.md` exactly; edit together. `CONTRACT_VERSION` is `MAJOR.MINOR`.
 - Variant `mutant` notation: `{WT}{pos}{MUT}`, **1-indexed**, multi-mutants colon-separated (`A24G:T56S`). Self-substitution (`A24A`) scores exactly `0.0`. Multi-mutant score = additive sum of per-substitution masked/wt-marginal log-odds.
 - Variants CSV columns: `variant_id, wt_sequence, mutant`. Scores CSV columns: `variant_id, mutant, n_mutations, score`. New artifact kind `variant_scores_csv`.
 - Invalid variant rows (WT-residue mismatch / out-of-range position / malformed mutant) get a blank score and a `result.warnings` entry; the batch does NOT fail.
@@ -24,7 +24,7 @@
 ### Task 1: Contract — version bump + scores artifact kind + example fixtures
 
 **Files:**
-- Modify: `src/plms/contract.py`
+- Modify: `src/protlms/contract.py`
 - Modify: `tests/data/manifest.example.json`, `tests/data/result.embed.example.json`
 - Create: `tests/data/result.score.example.json`
 - Modify: `tests/test_contract.py`
@@ -69,7 +69,7 @@ Expected: FAIL — `CONTRACT_VERSION` is still `"0.1"`; `variant_scores_csv` not
 
 - [ ] **Step 3: Implement the contract changes**
 
-In `src/plms/contract.py`, set the version constant:
+In `src/protlms/contract.py`, set the version constant:
 
 ```python
 CONTRACT_VERSION = "0.2"
@@ -89,7 +89,7 @@ Expected: PASS. Then `python -m pytest -q` — all still green (existing model t
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/plms/contract.py tests/test_contract.py tests/data/
+git add src/protlms/contract.py tests/test_contract.py tests/data/
 git commit -m "contract: bump to 0.2 and add variant_scores_csv artifact kind"
 ```
 
@@ -98,7 +98,7 @@ git commit -m "contract: bump to 0.2 and add variant_scores_csv artifact kind"
 ### Task 2: io — CSV staging, column validation, scores reader
 
 **Files:**
-- Modify: `src/plms/io.py`
+- Modify: `src/protlms/io.py`
 - Modify: `tests/test_io.py`
 
 **Interfaces:**
@@ -110,12 +110,12 @@ git commit -m "contract: bump to 0.2 and add variant_scores_csv artifact kind"
 
 - [ ] **Step 1: Write the failing tests**
 
-Add to `tests/test_io.py` (import `stage_file`, `check_csv_has_columns`, `read_variant_scores` from `plms.io`, and `InvalidRequestError` from `plms.exceptions`):
+Add to `tests/test_io.py` (import `stage_file`, `check_csv_has_columns`, `read_variant_scores` from `protlms.io`, and `InvalidRequestError` from `protlms.exceptions`):
 
 ```python
 def test_stage_file_copies_input_under_dest_name() -> None:
     import tempfile
-    from plms.io import stage_file
+    from protlms.io import stage_file
 
     src = Path(tempfile.mkdtemp()) / "v.csv"
     src.write_text("variant_id,wt_sequence,mutant\nv1,ACDE,A1G\n")
@@ -128,7 +128,7 @@ def test_stage_file_copies_input_under_dest_name() -> None:
 
 
 def test_check_csv_has_columns_ok(tmp_path: Path) -> None:
-    from plms.io import check_csv_has_columns
+    from protlms.io import check_csv_has_columns
 
     p = tmp_path / "v.csv"
     p.write_text("variant_id,wt_sequence,mutant\nv1,ACDE,A1G\n")
@@ -136,8 +136,8 @@ def test_check_csv_has_columns_ok(tmp_path: Path) -> None:
 
 
 def test_check_csv_has_columns_missing_raises(tmp_path: Path) -> None:
-    from plms.exceptions import InvalidRequestError
-    from plms.io import check_csv_has_columns
+    from protlms.exceptions import InvalidRequestError
+    from protlms.io import check_csv_has_columns
 
     p = tmp_path / "v.csv"
     p.write_text("variant_id,mutant\nv1,A1G\n")
@@ -148,7 +148,7 @@ def test_check_csv_has_columns_missing_raises(tmp_path: Path) -> None:
 def test_read_variant_scores_coerces_and_handles_blanks(tmp_path: Path) -> None:
     import json
 
-    from plms.io import read_result, read_variant_scores
+    from protlms.io import read_result, read_variant_scores
 
     (tmp_path / "scores.csv").write_text(
         "variant_id,mutant,n_mutations,score\nself,M1M,1,0.0\nbad,Z9Q,1,\n"
@@ -177,12 +177,12 @@ def test_read_variant_scores_coerces_and_handles_blanks(tmp_path: Path) -> None:
 Run: `python -m pytest tests/test_io.py -q`
 Expected: FAIL — `ImportError` for `stage_file` / `check_csv_has_columns` / `read_variant_scores`.
 
-- [ ] **Step 3: Implement in `src/plms/io.py`**
+- [ ] **Step 3: Implement in `src/protlms/io.py`**
 
 Add `import shutil` to the stdlib imports and `InvalidRequestError` to the exceptions import:
 
 ```python
-from plms.exceptions import FastaError, InvalidRequestError, OutputParseError
+from protlms.exceptions import FastaError, InvalidRequestError, OutputParseError
 ```
 
 Add `stage_file` after `stage_inputs`:
@@ -199,7 +199,7 @@ def stage_file(src: Path, dest_name: str) -> Iterator[StagedInput]:
     Yields:
         A :class:`StagedInput` pointing at the host input directory.
     """
-    with tempfile.TemporaryDirectory(prefix="plms-in-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="protlms-in-") as tmp:
         input_dir = Path(tmp)
         shutil.copyfile(src, input_dir / dest_name)
         yield StagedInput(input_dir=input_dir, input_filename=dest_name)
@@ -272,7 +272,7 @@ Expected: PASS (including the existing `test_read_likelihoods_coerces_numeric_co
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/plms/io.py tests/test_io.py
+git add src/protlms/io.py tests/test_io.py
 git commit -m "io: add CSV staging, column validation, and variant-scores reader"
 ```
 
@@ -281,7 +281,7 @@ git commit -m "io: add CSV staging, column validation, and variant-scores reader
 ### Task 3: models — generalize the run helper, add Model.score + ScoreResult
 
 **Files:**
-- Modify: `src/plms/models.py`, `src/plms/__init__.py`
+- Modify: `src/protlms/models.py`, `src/protlms/__init__.py`
 - Modify: `tests/test_models.py`
 
 **Interfaces:**
@@ -346,7 +346,7 @@ def variants_csv(tmp_path: Path) -> Path:
 
 
 def test_score_returns_rows(variants_csv: Path, tmp_path: Path) -> None:
-    from plms.models import ScoreResult
+    from protlms.models import ScoreResult
 
     model = _load()
     result = model.score(variants_csv, output_dir=tmp_path / "sc")
@@ -393,12 +393,12 @@ Note: the default `_manifest_json()` in this file lists `["embed", "likelihood"]
 Run: `python -m pytest tests/test_models.py -q`
 Expected: FAIL — `Model` has no `score`; `ScoreResult` not importable.
 
-- [ ] **Step 3: Implement in `src/plms/models.py`**
+- [ ] **Step 3: Implement in `src/protlms/models.py`**
 
-Update imports from `plms.io`:
+Update imports from `protlms.io`:
 
 ```python
-from plms.io import (
+from protlms.io import (
     check_csv_has_columns,
     load_per_residue_embeddings,
     load_pooled_embeddings,
@@ -546,7 +546,7 @@ Add the `score` method after `likelihood`:
         return ScoreResult(result=result, output_dir=out_dir, method=method, _keepalive=keep)
 ```
 
-In `src/plms/__init__.py`, add `ScoreResult` to the import from `plms.models` and to `__all__`.
+In `src/protlms/__init__.py`, add `ScoreResult` to the import from `protlms.models` and to `__all__`.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -556,21 +556,21 @@ Expected: PASS (the existing embed/likelihood tests still pass — behavior is u
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/plms/models.py src/plms/__init__.py tests/test_models.py
+git add src/protlms/models.py src/protlms/__init__.py tests/test_models.py
 git commit -m "models: add Model.score and ScoreResult; generalize run staging"
 ```
 
 ---
 
-### Task 4: cli — `plms score`
+### Task 4: cli — `protlms score`
 
 **Files:**
-- Modify: `src/plms/cli.py`
+- Modify: `src/protlms/cli.py`
 - Modify: `tests/test_cli.py`
 
 **Interfaces:**
 - Consumes: `load`, `ScoreResult` (via `model.score`).
-- Produces: `plms score MODEL VARIANTS_CSV -o OUT [--method ...] [--gpu/--no-gpu] [--batch-size N]`.
+- Produces: `protlms score MODEL VARIANTS_CSV -o OUT [--method ...] [--gpu/--no-gpu] [--batch-size N]`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -579,7 +579,7 @@ In `tests/test_cli.py`, add a `score` method to `FakeModel` and tests:
 ```python
     def score(self, variants, *, method, output_dir, use_gpu, batch_size):  # noqa: ANN001
         FakeModel.last_call = {"method": "score", "scoring_method": method, "use_gpu": use_gpu}
-        from plms.models import ScoreResult
+        from protlms.models import ScoreResult
 
         return ScoreResult(
             result=_result("score", [{"path": "scores.csv", "kind": "variant_scores_csv"}]),
@@ -596,7 +596,7 @@ def variants_csv(tmp_path: Path) -> Path:
 
 
 def test_score_command_invokes_model(variants_csv: Path, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("plms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
         app, ["score", "esm2-8m", str(variants_csv), "-o", str(tmp_path / "out"),
               "--method", "wt-marginal"]
@@ -611,7 +611,7 @@ def test_score_command_invokes_model(variants_csv: Path, tmp_path: Path, monkeyp
 Run: `python -m pytest tests/test_cli.py -q`
 Expected: FAIL — no `score` command registered (Typer exits non-zero / "No such command").
 
-- [ ] **Step 3: Implement in `src/plms/cli.py`**
+- [ ] **Step 3: Implement in `src/protlms/cli.py`**
 
 Add a `score` command after `likelihood`:
 
@@ -639,20 +639,20 @@ def score(
             f"[green]score[/green] complete: {result.result.n_output_records} variant(s) "
             f"written to [bold]{output_dir}[/bold]  method={method}"
         )
-    except PlmsError as exc:
+    except ProtlmsError as exc:
         _fail(exc)
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `python -m pytest tests/test_cli.py -q && plms --help`
-Expected: PASS; `plms --help` lists a `score` command.
+Run: `python -m pytest tests/test_cli.py -q && protlms --help`
+Expected: PASS; `protlms --help` lists a `score` command.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/plms/cli.py tests/test_cli.py
-git commit -m "cli: add plms score command"
+git add src/protlms/cli.py tests/test_cli.py
+git commit -m "cli: add protlms score command"
 ```
 
 ---
@@ -897,7 +897,7 @@ git commit -m "esm2: implement score (masked-marginal + wt-marginal) at contract
 - Modify: `tests/test_integration_esm2.py`
 
 **Interfaces:**
-- Consumes: `plms.load("esm2-8m")` (now contract 0.2 with `score`).
+- Consumes: `protlms.load("esm2-8m")` (now contract 0.2 with `score`).
 
 - [ ] **Step 1: Create the integration data**
 
@@ -918,7 +918,7 @@ Add to `tests/test_integration_esm2.py`:
 VARIANTS_CSV = REPO_ROOT / "tests" / "data" / "variants.csv"
 
 
-def test_score_masked_marginal_end_to_end(model: plms.Model, tmp_path: Path) -> None:
+def test_score_masked_marginal_end_to_end(model: protlms.Model, tmp_path: Path) -> None:
     result = model.score(VARIANTS_CSV, method="masked-marginal", output_dir=tmp_path / "sc")
     rows = {r["variant_id"]: r for r in result.rows()}
     assert set(rows) == {"self", "single", "double"}
@@ -929,14 +929,14 @@ def test_score_masked_marginal_end_to_end(model: plms.Model, tmp_path: Path) -> 
     assert math.isfinite(float(rows["single"]["score"]))
 
 
-def test_score_wt_marginal_runs(model: plms.Model, tmp_path: Path) -> None:
+def test_score_wt_marginal_runs(model: protlms.Model, tmp_path: Path) -> None:
     result = model.score(VARIANTS_CSV, method="wt-marginal", output_dir=tmp_path / "sc")
     rows = {r["variant_id"]: r for r in result.rows()}
     assert rows["self"]["score"] == pytest.approx(0.0, abs=1e-5)
     assert math.isfinite(float(rows["double"]["score"]))
 
 
-def test_manifest_now_declares_score(model: plms.Model) -> None:
+def test_manifest_now_declares_score(model: protlms.Model) -> None:
     assert "score" in {c.value for c in model.manifest.capabilities}
 ```
 
@@ -944,9 +944,9 @@ def test_manifest_now_declares_score(model: plms.Model) -> None:
 
 Run:
 ```bash
-docker build --build-arg ESM2_CHECKPOINT=esm2_t6_8M -t plms-esm2:t6_8M containers/esm2
-docker run --rm plms-esm2:t6_8M manifest   # capabilities include "score", contract_version 0.2
-PLMS_RUN_DOCKER_TESTS=1 python -m pytest tests/test_integration_esm2.py -v
+docker build --build-arg ESM2_CHECKPOINT=esm2_t6_8M -t protlms-esm2:t6_8M containers/esm2
+docker run --rm protlms-esm2:t6_8M manifest   # capabilities include "score", contract_version 0.2
+PROTLMS_RUN_DOCKER_TESTS=1 python -m pytest tests/test_integration_esm2.py -v
 ```
 Expected: image builds; manifest shows `score`; all integration tests PASS (self-substitution scores ≈ 0).
 
@@ -958,9 +958,9 @@ ruff check src/ tests/ containers/
 ruff format --check src/ tests/ containers/
 ty check src/
 python -m pytest -q                                   # unit suite green, integration skipped
-PLMS_RUN_DOCKER_TESTS=1 python -m pytest -q -m slow    # integration green
+PROTLMS_RUN_DOCKER_TESTS=1 python -m pytest -q -m slow    # integration green
 ```
-Expected: all clean/green. Manually: `plms score esm2-8m tests/data/variants.csv -o out/` prints a summary and writes `out/scores.csv` owned by the host user.
+Expected: all clean/green. Manually: `protlms score esm2-8m tests/data/variants.csv -o out/` prints a summary and writes `out/scores.csv` owned by the host user.
 
 - [ ] **Step 5: Commit**
 

@@ -6,10 +6,10 @@
 
 ## Summary
 
-Make `plms` model images distributable: publish each model's container image to
+Make `protlms` model images distributable: publish each model's container image to
 GitHub Container Registry (GHCR), have the client **auto-pull** the right image on
 demand, and **pin every run to an image digest** for reproducibility. This closes
-the publish → pull → pin loop so a user can `plms.load("esm2-8m")` on a fresh host
+the publish → pull → pin loop so a user can `protlms.load("esm2-8m")` on a fresh host
 with no manual `docker build`.
 
 Out of scope (deferred to a later phase): connecting to pre-existing **remote
@@ -37,7 +37,7 @@ container locally).
 | --- | --- |
 | Scope | Full publish → pull → pin loop; remote endpoints deferred. |
 | Pinning representation | `image` (human tag) **and** `digest` (`sha256:…`) fields; runs use `<repo>@<digest>`. CI writes the digest back. |
-| Pull UX | Auto-pull on `load()` when missing; `PLMS_NO_PULL` env / `--no-pull` flag escape hatch; explicit `plms pull` command. |
+| Pull UX | Auto-pull on `load()` when missing; `PROTLMS_NO_PULL` env / `--no-pull` flag escape hatch; explicit `protlms pull` command. |
 | Visibility / auth | **All images public.** Client does not manage login; it surfaces a clear auth-hint on pull failure. |
 | Publishing trigger | `workflow_dispatch` (manual), builds+pushes one model, opens a PR writing the digest back to `models.yaml`. |
 | Pull-logic location | **Approach A:** primitives (`image_present`, `pull`) on the `Runner` protocol; orchestration in a module-level `ensure_image` helper. |
@@ -54,7 +54,7 @@ Docker-SDK runner inherits pulling for free and tests can inject a fake runner.
 ```yaml
 - name: esm2-8m
   aliases: [esm2_t6_8M]
-  image: ghcr.io/briney/plms-esm2:t6_8M   # human-readable tag
+  image: ghcr.io/briney/protlms-esm2:t6_8M   # human-readable tag
   digest: sha256:abc123…                  # immutable; written back by CI
   model_family: esm2
   build:                                  # build-only metadata; client ignores it
@@ -99,7 +99,7 @@ def ensure_image(runner: Runner, ref: str, *, allow_pull: bool, model_name: str)
     if runner.image_present(ref):
         return
     if not allow_pull:
-        raise ImageNotFoundError(...)  # hint: `plms pull <model_name>` / unset PLMS_NO_PULL
+        raise ImageNotFoundError(...)  # hint: `protlms pull <model_name>` / unset PROTLMS_NO_PULL
     runner.pull(ref)
 ```
 
@@ -108,7 +108,7 @@ def ensure_image(runner: Runner, ref: str, *, allow_pull: bool, model_name: str)
 ### 3. Load flow (`models.py`)
 
 `load()` gains `allow_pull: bool | None = None`. Resolution order:
-explicit arg → `False` if `PLMS_NO_PULL` is truthy → default `True`.
+explicit arg → `False` if `PROTLMS_NO_PULL` is truthy → default `True`.
 
 ```python
 runner = runner or SubprocessDockerRunner()
@@ -127,8 +127,8 @@ also execute the pinned digest.
 
 ### 4. CLI (`cli.py`)
 
-- `plms pull <model>` — resolve entry, `ensure_image(allow_pull=True)` (pull if missing).
-- `plms pull --all` — iterate every registry entry.
+- `protlms pull <model>` — resolve entry, `ensure_image(allow_pull=True)` (pull if missing).
+- `protlms pull --all` — iterate every registry entry.
 - `--no-pull` flag added to `embed` / `likelihood` / `generate`, threading
   `allow_pull=False` into `load()`.
 
@@ -178,7 +178,7 @@ ref, exit code, and stderr tail; if stderr looks auth-related
 Failure modes stay distinct:
 
 - `ImageNotFoundError` — image absent **and** we won't fetch (`allow_pull=False`);
-  hint points to `plms pull <model>` / unsetting `PLMS_NO_PULL`. `manifest()`
+  hint points to `protlms pull <model>` / unsetting `PROTLMS_NO_PULL`. `manifest()`
   keeps raising this as a backstop, but the normal path is `ensure_image`.
 - `ImagePullError` — fetch attempted and failed (network / auth / unknown digest).
 - `RunnerError` (docker executable missing) — unchanged.
@@ -191,10 +191,10 @@ Failure modes stay distinct:
 - **Unit — `ensure_image` with a `FakeRunner`** that records calls: present →
   no pull; absent + allow → pulls; absent + deny → `ImageNotFoundError`; pull
   raises → `ImagePullError` propagates.
-- **Unit — `load()` allow_pull resolution:** explicit arg wins; `PLMS_NO_PULL`
+- **Unit — `load()` allow_pull resolution:** explicit arg wins; `PROTLMS_NO_PULL`
   honored (monkeypatched env); default pulls. FakeRunner asserts `manifest()` /
   `run()` receive the **pinned ref**, not the tag.
-- **Unit — CLI:** `plms pull <model>` and `--all` (CliRunner + injected fake
+- **Unit — CLI:** `protlms pull <model>` and `--all` (CliRunner + injected fake
   runner/registry, per existing `test_cli.py` pattern); `--no-pull` threads
   `allow_pull=False`.
 - **Unit — publishing scripts:** `scripts/registry_publish.py` pure functions
@@ -218,13 +218,13 @@ Failure modes stay distinct:
 
 ## Files touched
 
-- `src/plms/registry.py` — `digest`, `build` fields; `BuildSpec`; `pinned_ref()`.
-- `src/plms/runner.py` — `image_present`, `pull` on the protocol + impl;
+- `src/protlms/registry.py` — `digest`, `build` fields; `BuildSpec`; `pinned_ref()`.
+- `src/protlms/runner.py` — `image_present`, `pull` on the protocol + impl;
   `ensure_image` helper.
-- `src/plms/models.py` — `load(allow_pull=…)`, env resolution, `Model.image_ref`.
-- `src/plms/exceptions.py` — `ImagePullError`.
-- `src/plms/cli.py` — `plms pull` command; `--no-pull` on embed/likelihood/generate.
-- `src/plms/_data/models.yaml` — GHCR image refs, `build:` blocks (digests via CI).
+- `src/protlms/models.py` — `load(allow_pull=…)`, env resolution, `Model.image_ref`.
+- `src/protlms/exceptions.py` — `ImagePullError`.
+- `src/protlms/cli.py` — `protlms pull` command; `--no-pull` on embed/likelihood/generate.
+- `src/protlms/_data/models.yaml` — GHCR image refs, `build:` blocks (digests via CI).
 - `scripts/registry_publish.py` — build lookup + digest write-back (testable).
 - `.github/workflows/publish-image.yaml` — manual build/push + digest-PR workflow.
 - `tests/` — `test_registry.py`, `test_runner.py`, `test_models.py`, `test_cli.py`,

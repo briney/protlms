@@ -1,6 +1,6 @@
 """The unified model interface: ``load`` a model and run capabilities on it.
 
-This is the only module that ties the others together. ``plms.load(name)``
+This is the only module that ties the others together. ``protlms.load(name)``
 returns a :class:`Model` whose ``embed``/``likelihood`` methods validate the
 request against the model's manifest, stage inputs, drive the runner, and parse
 the outputs into Python objects.
@@ -15,20 +15,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from plms.chunking import run_chunked
-from plms.contract import (
+from protlms.chunking import run_chunked
+from protlms.contract import (
     Capability,
     Manifest,
     Result,
     check_contract_compatibility,
     parse_container_error,
 )
-from plms.exceptions import (
+from protlms.exceptions import (
     CapabilityNotSupportedError,
     ContainerExecutionError,
     InvalidRequestError,
 )
-from plms.io import (
+from protlms.io import (
     check_csv_has_columns,
     load_per_residue_embeddings,
     load_pooled_embeddings,
@@ -40,15 +40,15 @@ from plms.io import (
     stage_file,
     stage_inputs,
 )
-from plms.registry import ModelEntry, Registry
-from plms.runner import Runner, RunSpec, SubprocessDockerRunner, ensure_image
+from protlms.registry import ModelEntry, Registry
+from protlms.runner import Runner, RunSpec, SubprocessDockerRunner, ensure_image
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     import numpy as np
 
-    from plms.io import FastaRecord
+    from protlms.io import FastaRecord
 
 logger = logging.getLogger(__name__)
 
@@ -426,7 +426,7 @@ class Model:
             out = Path(output_dir).resolve()
             out.mkdir(parents=True, exist_ok=True)
             return out, None
-        keep = tempfile.TemporaryDirectory(prefix="plms-out-")
+        keep = tempfile.TemporaryDirectory(prefix="protlms-out-")
         return Path(keep.name).resolve(), keep
 
     @staticmethod
@@ -449,10 +449,10 @@ class Model:
 
 
 def _resolve_allow_pull(allow_pull: bool | None) -> bool:
-    """Resolve pull policy: explicit arg wins, else consult ``PLMS_NO_PULL``."""
+    """Resolve pull policy: explicit arg wins, else consult ``PROTLMS_NO_PULL``."""
     if allow_pull is not None:
         return allow_pull
-    no_pull = os.environ.get("PLMS_NO_PULL", "").strip().lower() in {"1", "true", "yes"}
+    no_pull = os.environ.get("PROTLMS_NO_PULL", "").strip().lower() in {"1", "true", "yes"}
     return not no_pull
 
 
@@ -474,7 +474,7 @@ def load(
         runner: The container runner (defaults to a local docker subprocess runner).
         registry: The model registry (defaults to the packaged registry).
         allow_pull: Whether to pull a missing image. ``None`` (default) consults
-            the ``PLMS_NO_PULL`` environment variable.
+            the ``PROTLMS_NO_PULL`` environment variable.
 
     Raises:
         ModelNotFoundError: If the name is unknown.

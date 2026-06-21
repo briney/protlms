@@ -1,7 +1,7 @@
 # ProGen2 container
 
 A contract-compliant Docker image wrapping the [ProGen2](https://huggingface.co/hugohrban/progen2-small)
-autoregressive protein language model. It implements the plms container contract
+autoregressive protein language model. It implements the protlms container contract
 (see [`../../docs/CONTRACT.md`](../../docs/CONTRACT.md)) and exposes the
 `manifest`, `generate`, `likelihood`, and hidden `_prefetch` subcommands.
 
@@ -12,10 +12,10 @@ and its weights are baked into the image, so runtime requires no network access.
 
 ```bash
 # small model (~300M params, 605 MB weights)
-docker build --build-arg PROGEN2_CHECKPOINT=progen2-small -t plms-progen2:small containers/progen2
+docker build --build-arg PROGEN2_CHECKPOINT=progen2-small -t protlms-progen2:small containers/progen2
 
 # base model (~760M params)
-docker build --build-arg PROGEN2_CHECKPOINT=progen2-base -t plms-progen2:base containers/progen2
+docker build --build-arg PROGEN2_CHECKPOINT=progen2-base -t protlms-progen2:base containers/progen2
 ```
 
 `PROGEN2_CHECKPOINT` accepts a short name (`progen2-small`, `progen2-base`, …)
@@ -25,26 +25,26 @@ which is resolved to `hugohrban/<name>`, or a full HuggingFace id.
 
 ```bash
 # introspect the manifest (no mounts needed)
-docker run --rm plms-progen2:small manifest
+docker run --rm protlms-progen2:small manifest
 
 # generate sequences from prompts (CPU)
 mkdir -p in out
 printf '>p1\nMAGIC\n>uncond\n\n' > in/prompts.fasta
 docker run --rm -v "$PWD/in:/in:ro" -v "$PWD/out:/out:rw" \
-  plms-progen2:small generate \
+  protlms-progen2:small generate \
     --input /in/prompts.fasta --output /out \
     --num-samples 2 --temperature 1.0 --seed 42
 
 # compute causal log-likelihoods (CPU)
 docker run --rm -v "$PWD/in:/in:ro" -v "$PWD/out:/out:rw" \
-  plms-progen2:small likelihood --input /in/seqs.fasta --output /out
+  protlms-progen2:small likelihood --input /in/seqs.fasta --output /out
 
 # GPU (requires --gpus flag at runtime)
 docker run --rm --gpus all -v "$PWD/in:/in:ro" -v "$PWD/out:/out:rw" \
-  plms-progen2:small generate --input /in/prompts.fasta --output /out --device cuda
+  protlms-progen2:small generate --input /in/prompts.fasta --output /out --device cuda
 ```
 
-Normally you do not run these by hand — the `plms` client builds these commands
+Normally you do not run these by hand — the `protlms` client builds these commands
 for you.
 
 ## Models

@@ -12,7 +12,7 @@ SAMPLE = """\
 models:
   - name: esm2-8m
     aliases: [esm2_t6_8M]
-    image: ghcr.io/briney/plms-esm2:t6_8M
+    image: ghcr.io/briney/protlms-esm2:t6_8M
     model_family: esm2
     build:
       context: containers/esm2
@@ -28,7 +28,7 @@ def _yaml(tmp_path: Path) -> Path:
 
 def test_lookup_build_returns_image_context_args(tmp_path: Path) -> None:
     image, context, args = lookup_build(_yaml(tmp_path), "esm2-8m")
-    assert image == "ghcr.io/briney/plms-esm2:t6_8M"
+    assert image == "ghcr.io/briney/protlms-esm2:t6_8M"
     assert context == "containers/esm2"
     assert args == {"ESM2_CHECKPOINT": "esm2_t6_8M"}
 
@@ -63,13 +63,13 @@ def test_set_digest_rejects_bad_digest(tmp_path: Path) -> None:
 TWO_ENTRY = """\
 models:
   - name: esm2-8m
-    image: ghcr.io/briney/plms-esm2:t6_8M
+    image: ghcr.io/briney/protlms-esm2:t6_8M
     model_family: esm2
     build:
       context: containers/esm2
       args: { ESM2_CHECKPOINT: esm2_t6_8M }
   - name: progen2-small
-    image: ghcr.io/briney/plms-progen2:small
+    image: ghcr.io/briney/protlms-progen2:small
     model_family: progen2
     build:
       context: containers/progen2
@@ -88,5 +88,5 @@ def test_set_digest_preserves_other_entries(tmp_path: Path) -> None:
     assert by_name["esm2-8m"]["digest"] == "sha256:abc123"
     # sibling entry untouched: no digest added, fields intact
     assert "digest" not in by_name["progen2-small"]
-    assert by_name["progen2-small"]["image"] == "ghcr.io/briney/plms-progen2:small"
+    assert by_name["progen2-small"]["image"] == "ghcr.io/briney/protlms-progen2:small"
     assert len(data["models"]) == 2

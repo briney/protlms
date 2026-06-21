@@ -1,4 +1,4 @@
-"""Command-line interface for plms."""
+"""Command-line interface for protlms."""
 
 from pathlib import Path
 from typing import Annotated
@@ -7,21 +7,21 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from plms import __version__
-from plms.exceptions import InvalidRequestError, PlmsError
-from plms.models import load
-from plms.registry import Registry
-from plms.runner import SubprocessDockerRunner, ensure_image
+from protlms import __version__
+from protlms.exceptions import InvalidRequestError, ProtlmsError
+from protlms.models import load
+from protlms.registry import Registry
+from protlms.runner import SubprocessDockerRunner, ensure_image
 
 app = typer.Typer(
-    name="plms",
+    name="protlms",
     help="Unified toolkit for inference across a variety of protein language models (pLMs).",
     no_args_is_help=True,
     add_completion=False,
 )
 
 models_app = typer.Typer(
-    help="Inspect the models available to plms.",
+    help="Inspect the models available to protlms.",
     no_args_is_help=True,
 )
 app.add_typer(models_app, name="models")
@@ -52,20 +52,20 @@ _NoPullOpt = Annotated[
 @app.callback()
 def _main() -> None:
     """Unified toolkit for inference across protein language models (pLMs)."""
-    # Present so Typer treats `plms` as a command group with subcommands,
+    # Present so Typer treats `protlms` as a command group with subcommands,
     # rather than collapsing the single command into the top level.
 
 
 @app.command()
 def version() -> None:
-    """Print the installed plms version."""
+    """Print the installed protlms version."""
     typer.echo(__version__)
 
 
 @models_app.command("list")
 def models_list() -> None:
-    """List the models registered with plms."""
-    table = Table(title="plms models")
+    """List the models registered with protlms."""
+    table = Table(title="protlms models")
     table.add_column("name", style="bold")
     table.add_column("aliases")
     table.add_column("family")
@@ -95,7 +95,7 @@ def pull(
             console.print(f"pulling [bold]{entry.name}[/bold] ({ref}) …")
             ensure_image(docker_runner, ref, allow_pull=True, model_name=entry.name)
             console.print(f"  [green]ok[/green] {entry.name}")
-    except PlmsError as exc:
+    except ProtlmsError as exc:
         _fail(exc)
 
 
@@ -133,7 +133,7 @@ def embed(
             f"  model={model_obj.manifest.name}  "
             f"embedding_dim={model_obj.manifest.embedding_dim}  pooling={pooling}"
         )
-    except PlmsError as exc:
+    except ProtlmsError as exc:
         _fail(exc)
 
 
@@ -157,7 +157,7 @@ def likelihood(
             f"[green]likelihood[/green] complete: {result.result.n_output_records} record(s) "
             f"written to [bold]{output_dir}[/bold]"
         )
-    except PlmsError as exc:
+    except ProtlmsError as exc:
         _fail(exc)
 
 
@@ -184,7 +184,7 @@ def score(
             f"[green]score[/green] complete: {result.result.n_output_records} variant(s) "
             f"written to [bold]{output_dir}[/bold] method={method}"
         )
-    except PlmsError as exc:
+    except ProtlmsError as exc:
         _fail(exc)
 
 
@@ -236,7 +236,7 @@ def generate(
             f"[green]generate[/green] complete: {result.result.n_output_records} sequence(s) "
             f"written to [bold]{output_dir}[/bold]"
         )
-    except PlmsError as exc:
+    except ProtlmsError as exc:
         _fail(exc)
 
 
@@ -248,14 +248,14 @@ def _parse_layers(value: str) -> list[int]:
         raise InvalidRequestError(f"invalid --layers value {value!r}: {exc}") from exc
 
 
-def _fail(exc: PlmsError) -> None:
+def _fail(exc: ProtlmsError) -> None:
     """Print a clean error message and exit with status 1."""
     console.print(f"[bold red]Error:[/bold red] {exc}")
     raise typer.Exit(1)
 
 
 def main() -> None:
-    """Entry point for the ``plms`` console script."""
+    """Entry point for the ``protlms`` console script."""
     app()
 
 

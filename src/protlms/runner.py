@@ -14,7 +14,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
-from plms.exceptions import ImageNotFoundError, ImagePullError, RunnerError
+from protlms.exceptions import ImageNotFoundError, ImagePullError, RunnerError
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -83,7 +83,7 @@ def ensure_image(runner: Runner, ref: str, *, allow_pull: bool, model_name: str)
     if not allow_pull:
         raise ImageNotFoundError(
             f"image {ref!r} for model {model_name!r} is not available locally and "
-            f"pulling is disabled. Run `plms pull {model_name}` or unset PLMS_NO_PULL."
+            f"pulling is disabled. Run `protlms pull {model_name}` or unset PROTLMS_NO_PULL."
         )
     logger.info("pulling image %s for model %s", ref, model_name)
     runner.pull(ref)

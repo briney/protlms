@@ -8,8 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from plms.exceptions import FastaError, OutputParseError
-from plms.io import (
+from protlms.exceptions import FastaError, OutputParseError
+from protlms.io import (
     FastaRecord,
     load_per_residue_embeddings,
     load_pooled_embeddings,
@@ -192,7 +192,7 @@ def test_read_likelihoods_coerces_numeric_columns(tmp_path: Path) -> None:
 
 
 def test_read_generated(tmp_path: Path) -> None:
-    from plms.io import read_generated
+    from protlms.io import read_generated
 
     (tmp_path / "generated.fasta").write_text(">p__sample0\nACDE\n>p__sample1\nFGHI\n")
     (tmp_path / "result.json").write_text(
@@ -214,7 +214,7 @@ def test_read_generated(tmp_path: Path) -> None:
 
 
 def test_stage_file_copies_input_under_dest_name(tmp_path: Path) -> None:
-    from plms.io import stage_file
+    from protlms.io import stage_file
 
     src = tmp_path / "v.csv"
     src.write_text("variant_id,wt_sequence,mutant\nv1,ACDE,A1G\n")
@@ -227,7 +227,7 @@ def test_stage_file_copies_input_under_dest_name(tmp_path: Path) -> None:
 
 
 def test_check_csv_has_columns_ok(tmp_path: Path) -> None:
-    from plms.io import check_csv_has_columns
+    from protlms.io import check_csv_has_columns
 
     p = tmp_path / "v.csv"
     p.write_text("variant_id,wt_sequence,mutant\nv1,ACDE,A1G\n")
@@ -235,8 +235,8 @@ def test_check_csv_has_columns_ok(tmp_path: Path) -> None:
 
 
 def test_check_csv_has_columns_missing_raises(tmp_path: Path) -> None:
-    from plms.exceptions import InvalidRequestError
-    from plms.io import check_csv_has_columns
+    from protlms.exceptions import InvalidRequestError
+    from protlms.io import check_csv_has_columns
 
     p = tmp_path / "v.csv"
     p.write_text("variant_id,mutant\nv1,A1G\n")
@@ -245,7 +245,7 @@ def test_check_csv_has_columns_missing_raises(tmp_path: Path) -> None:
 
 
 def test_read_variant_scores_coerces_and_handles_blanks(tmp_path: Path) -> None:
-    from plms.io import read_result, read_variant_scores
+    from protlms.io import read_result, read_variant_scores
 
     (tmp_path / "scores.csv").write_text(
         "variant_id,mutant,n_mutations,score\nself,M1M,1,0.0\nbad,Z9Q,1,\n"
