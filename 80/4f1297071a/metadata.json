@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "804f1297071a",
+  "strategy": "manual-commit",
+  "branch": "feature/esm-c-transformers",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/80/4f1297071a/0/metadata.json",
+      "transcript": "/80/4f1297071a/0/full.jsonl",
+      "compact_transcript": "/80/4f1297071a/0/transcript.jsonl",
+      "content_hash": "/80/4f1297071a/0/content_hash.txt",
+      "prompt": "/80/4f1297071a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 13804,
+    "cache_creation_tokens": 566014,
+    "cache_read_tokens": 56917650,
+    "output_tokens": 313652,
+    "api_call_count": 186
+  }
+}
