@@ -1136,3 +1136,7 @@ Tests: `test_eval_contacts.py` + `test_cli.py` = 28 passed; full fast suite `-m 
 Report: `/home/briney/git/protlms/.superpowers/sdd/final-fixes-report.md`</result>
 <usage><subagent_tokens>67655</subagent_tokens><tool_uses>48</tool_uses><duration_ms>185697</duration_ms></usage>
 </task-notification>
+
+---
+
+PR merged and branch deleted. Let's move on to Plan 2 (ESM-C).
