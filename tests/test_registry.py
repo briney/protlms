@@ -99,3 +99,29 @@ def test_build_spec_parsed_from_entry() -> None:
     assert isinstance(entry.build, BuildSpec)
     assert entry.build.context == "containers/esm2"
     assert entry.build.args["ESM2_CHECKPOINT"] == "esm2_t6_8M"
+
+
+def test_resolve_protbert() -> None:
+    registry = Registry.load()
+    base = registry.resolve("protbert")
+    assert base.image == "ghcr.io/briney/protlms-protbert:uniref100"
+    assert base.model_family == "protbert"
+    assert registry.resolve("prot_bert") == base
+    bfd = registry.resolve("protbert-bfd")
+    assert bfd.image == "ghcr.io/briney/protlms-protbert:bfd"
+    assert bfd.model_family == "protbert"
+    assert registry.resolve("prot_bert_bfd") == bfd
+
+
+def test_resolve_e1() -> None:
+    registry = Registry.load()
+    cases = [
+        ("e1-150m", "E1-150m", "150m"),
+        ("e1-300m", "E1-300m", "300m"),
+        ("e1-600m", "E1-600m", "600m"),
+    ]
+    for name, alias, tag in cases:
+        entry = registry.resolve(name)
+        assert entry.image == f"ghcr.io/briney/protlms-e1:{tag}"
+        assert entry.model_family == "e1"
+        assert registry.resolve(alias) == entry
