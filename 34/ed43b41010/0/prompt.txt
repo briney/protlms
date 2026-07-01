@@ -1,0 +1,13 @@
+I'd like to test the emergent structural knowledge of several protein language models (ESM-1b, ESM-2, and ESM-C to start, in all of their various size checkpoints). The metric is long-range precision@L, computed using the categorical jacobian method described here: https://www.pnas.org/doi/10.1073/pnas.2406285121. The dataset I'd like to evaluate these models on is CASP14 (the PDB files can be found in `~/projects/esm-c/data/casp14/`). This will require some updates to the `protlms` package to support new models: ESM-1b (https://huggingface.co/facebook/esm1b_t33_650M_UR50S) and ESM-2 (https://huggingface.co/facebook/esm2_t33_650M_UR50D) can both be used directly from HuggingFace using the `transformers` library. ESM-C is also compatible with `transformers` using the `AutoModel` and `AutoTokenizer` loading mechasnisms (see: https://github.com/Biohub/esm#esmc), and it probably makes sense to switch from the ESM SDK to `transformers` because the largest ESM-C model is available on huggingface but it's unclear whether it's available via the SDK. Let's brainstorm the best way to code this. My gut says we should add a `contacts` capability to the protlms contract. The container computes the full categorical Jacobian internally (mutate each position to all 20 AA, get logits, build the (L,20,L,20) tensor, post-process via center → symmetrize → Frobenius norm → APC) and returns just the (L,L) contact score matrix. Several reasons why this makes sense:
+
+- The model-specific logic (how to access logits, how to mask/mutate, tokenizer quirks) lives inside the container where it has direct model access — exactly where it belongs.
+- The output is tiny: an (L,L) float32 matrix (4MB for L=1000). No huge tensors crossing the container boundary.
+- One container invocation per target — no L× container-startup overhead.
+- Mirrors how score already bakes a specific analysis method (masked-marginal) into a generic capability. contacts does the same for the categorical Jacobian.
+- New models "just work" — add a container + registry entry, implement the contacts subcommand, and the evaluation code needs zero changes.
+
+What needs to be built into `protlms` to make it happen?
+
+---
+
+Looks good. OK to bump the contract to 0.4 and the "giants" can go into the registry now. One clarification -- I'd prefer that we migrate all ESM-C models to HF, not just the 6B (that keeps everything unified across the ESM-C containers).
