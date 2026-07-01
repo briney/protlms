@@ -30,7 +30,7 @@ def _manifest_json(**overrides) -> str:
         "version": "1.0.0",
         "description": "ESM2 8M.",
         "model_family": "esm2",
-        "capabilities": ["embed", "likelihood", "score"],
+        "capabilities": ["embed", "likelihood", "score", "contacts"],
         "embedding_dim": EMBEDDING_DIM,
         "max_sequence_length": 1024,
         "pooling_modes": ["mean", "cls", "none"],
@@ -97,6 +97,9 @@ class FakeRunner:
             records = read_fasta(spec.input_dir / "seqs.fasta")
             num_samples = int(spec.command[spec.command.index("--num-samples") + 1])
             self._write_generate(out, records, num_samples)
+        elif capability == "contacts":
+            records = read_fasta(spec.input_dir / "seqs.fasta")
+            self._write_contacts(out, records)
 
     def _write_embed(self, out: Path, records, pooling: str) -> None:  # noqa: ANN001
         artifacts = []
@@ -162,6 +165,24 @@ class FakeRunner:
             records,
             [{"path": "generated.fasta", "kind": "generated_fasta", "record_ids": out_ids}],
         )
+
+    def _write_contacts(self, out: Path, records) -> None:  # noqa: ANN001
+        contacts_dir = out / "contacts"
+        contacts_dir.mkdir()
+        artifacts = []
+        for rec in records:
+            n = len(rec.sequence)
+            np.save(contacts_dir / f"{rec.id}.npy", np.zeros((n, n), dtype=np.float32))
+            artifacts.append(
+                {
+                    "path": f"contacts/{rec.id}.npy",
+                    "kind": "contact_map",
+                    "record_ids": [rec.id],
+                    "shape": [n, n],
+                    "dtype": "float32",
+                }
+            )
+        self._write_result(out, "contacts", records, artifacts)
 
     def _write_result(self, out: Path, capability: str, records, artifacts) -> None:  # noqa: ANN001
         (out / "result.json").write_text(
@@ -476,3 +497,36 @@ def test_load_env_no_pull_disables_pull(monkeypatch) -> None:
     runner = FakeRunner(_manifest_json(), present=False)
     with pytest.raises(ImageNotFoundError):
         load("esm2-8m", runner=runner)
+
+
+def test_contacts_returns_maps_by_id(fasta: Path, tmp_path: Path) -> None:
+    from protlms.models import ContactsResult
+
+    model = _load()
+    result = model.contacts(fasta, output_dir=tmp_path / "ct")
+    assert isinstance(result, ContactsResult)
+    maps = result.maps()
+    assert set(maps) == {"seq1", "seq2"}
+    assert maps["seq1"].shape == (9, 9)  # len("ACDEFGHIK") == 9
+
+
+def test_contacts_builds_expected_command(fasta: Path, tmp_path: Path) -> None:
+    model = _load()
+    model.contacts(fasta, output_dir=tmp_path / "ct")
+    cmd = model._runner.last_spec.command  # type: ignore[attr-defined]
+    assert cmd[0] == "contacts"
+    assert cmd[cmd.index("--input") + 1] == "/in/seqs.fasta"
+    assert cmd[cmd.index("--method") + 1] == "categorical-jacobian"
+
+
+def test_contacts_invalid_method_raises_before_run(fasta: Path, tmp_path: Path) -> None:
+    model = _load()
+    with pytest.raises(InvalidRequestError):
+        model.contacts(fasta, method="bogus", output_dir=tmp_path / "ct")
+    assert model._runner.last_spec is None  # type: ignore[attr-defined]
+
+
+def test_contacts_unsupported_capability_raises(fasta: Path, tmp_path: Path) -> None:
+    model = _load(capabilities=["embed"])  # no contacts
+    with pytest.raises(CapabilityNotSupportedError):
+        model.contacts(fasta, output_dir=tmp_path / "ct")
