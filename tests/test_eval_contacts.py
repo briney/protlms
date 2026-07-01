@@ -96,3 +96,15 @@ def test_long_range_precision_at_l_shape_mismatch_raises() -> None:
 
     with pytest.raises(ValueError):
         long_range_precision_at_l(np.zeros((4, 4)), np.zeros((4, 4), dtype=bool), np.arange(3))
+
+
+@pytest.mark.parametrize("bad_top", [0, -1])
+def test_long_range_precision_at_l_rejects_nonpositive_top(bad_top: int) -> None:
+    from protlms.eval.contacts import long_range_precision_at_l
+    from protlms.exceptions import InvalidRequestError
+
+    n = 4
+    with pytest.raises(InvalidRequestError):
+        long_range_precision_at_l(
+            np.zeros((n, n)), np.zeros((n, n), dtype=bool), np.arange(n), top=bad_top
+        )

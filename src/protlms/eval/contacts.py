@@ -12,6 +12,8 @@ import numpy as np
 from Bio.PDB import PDBParser
 from Bio.PDB.Polypeptide import is_aa
 
+from protlms.exceptions import InvalidRequestError
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -159,6 +161,8 @@ def long_range_precision_at_l(
         raise ValueError(
             f"shape mismatch: pred={pred.shape}, true={true.shape}, resnums={resnums.shape}"
         )
+    if top is not None and top <= 0:
+        raise InvalidRequestError(f"top must be positive, got {top}")
     i, j = np.triu_indices(n, k=1)
     eligible = np.abs(resnums[i] - resnums[j]) >= sep
     i, j = i[eligible], j[eligible]
