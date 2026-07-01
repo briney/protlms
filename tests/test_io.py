@@ -8,9 +8,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from protlms.contract import Result
 from protlms.exceptions import FastaError, OutputParseError
 from protlms.io import (
     FastaRecord,
+    load_contact_maps,
     load_per_residue_embeddings,
     load_pooled_embeddings,
     read_fasta,
@@ -267,3 +269,44 @@ def test_read_variant_scores_coerces_and_handles_blanks(tmp_path: Path) -> None:
     assert rows[0]["n_mutations"] == 1
     assert rows[0]["score"] == 0.0
     assert rows[1]["score"] is None  # blank score for an invalid row
+
+
+def test_load_contact_maps_returns_arrays_by_id(tmp_path: Path) -> None:
+    (tmp_path / "contacts").mkdir()
+    np.save(tmp_path / "contacts" / "gb1.npy", np.zeros((5, 5), dtype=np.float32))
+    result = Result.model_validate(
+        {
+            "contract_version": "0.4",
+            "capability": "contacts",
+            "model_name": "esm2_t6_8M",
+            "n_input_records": 1,
+            "n_output_records": 1,
+            "artifacts": [
+                {
+                    "path": "contacts/gb1.npy",
+                    "kind": "contact_map",
+                    "record_ids": ["gb1"],
+                    "shape": [5, 5],
+                    "dtype": "float32",
+                }
+            ],
+        }
+    )
+    maps = load_contact_maps(tmp_path, result)
+    assert set(maps) == {"gb1"}
+    assert maps["gb1"].shape == (5, 5)
+
+
+def test_load_contact_maps_raises_when_absent(tmp_path: Path) -> None:
+    result = Result.model_validate(
+        {
+            "contract_version": "0.4",
+            "capability": "contacts",
+            "model_name": "x",
+            "n_input_records": 0,
+            "n_output_records": 0,
+            "artifacts": [],
+        }
+    )
+    with pytest.raises(OutputParseError):
+        load_contact_maps(tmp_path, result)

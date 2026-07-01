@@ -214,6 +214,21 @@ def load_per_residue_embeddings(out_dir: Path, result: Result) -> dict[str, np.n
     return out
 
 
+def load_contact_maps(out_dir: Path, result: Result) -> dict[str, np.ndarray]:
+    """Load contact-score maps keyed by record id (each shape ``(L, L)``).
+
+    Raises:
+        OutputParseError: If no contact_map artifact is present.
+    """
+    out: dict[str, np.ndarray] = {}
+    for artifact in _artifacts(result, ArtifactKind.CONTACT_MAP):
+        rid = artifact.record_ids[0] if artifact.record_ids else Path(artifact.path).stem
+        out[rid] = np.load(out_dir / artifact.path)
+    if not out:
+        raise OutputParseError("result declares no contact_map artifacts")
+    return out
+
+
 def _read_csv_artifact(
     out_dir: Path,
     result: Result,
