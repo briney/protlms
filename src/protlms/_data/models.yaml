@@ -4,18 +4,18 @@
 models:
   - name: esm2-8m
     aliases: [esm2_t6_8M]
-    image: ghcr.io/briney/protlms-esm2:t6_8M
+    image: ghcr.io/briney/protlms-esm:t6_8M
     model_family: esm2
     build:
-      context: containers/esm2
-      args: { ESM2_CHECKPOINT: esm2_t6_8M }
+      context: containers/esm
+      args: { ESM_HF_ID: facebook/esm2_t6_8M_UR50D, ESM_MODEL_NAME: esm2_t6_8M, ESM_MODEL_FAMILY: esm2 }
   - name: esm2-650m
     aliases: [esm2_t33_650M]
-    image: ghcr.io/briney/protlms-esm2:t33_650M
+    image: ghcr.io/briney/protlms-esm:t33_650M
     model_family: esm2
     build:
-      context: containers/esm2
-      args: { ESM2_CHECKPOINT: esm2_t33_650M }
+      context: containers/esm
+      args: { ESM_HF_ID: facebook/esm2_t33_650M_UR50D, ESM_MODEL_NAME: esm2_t33_650M, ESM_MODEL_FAMILY: esm2 }
   - name: progen2-small
     aliases: [progen2_small]
     image: ghcr.io/briney/protlms-progen2:small

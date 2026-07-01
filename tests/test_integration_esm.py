@@ -1,4 +1,4 @@
-"""End-to-end integration test against a locally built ESM2 image.
+"""End-to-end integration test against a locally built shared ESM image.
 
 Gated: runs only when ``PROTLMS_RUN_DOCKER_TESTS=1`` and a working Docker daemon is
 available. Builds the tiny ``esm2_t6_8M`` image if it is not already present,
@@ -19,7 +19,7 @@ import pytest
 
 import protlms
 
-IMAGE = "ghcr.io/briney/protlms-esm2:t6_8M"
+IMAGE = "ghcr.io/briney/protlms-esm:t6_8M"
 EMBEDDING_DIM = 320
 REPO_ROOT = Path(__file__).parents[1]
 TINY_FASTA = REPO_ROOT / "tests" / "data" / "tiny.fasta"
@@ -43,7 +43,7 @@ pytestmark = [
 
 
 @pytest.fixture(scope="session")
-def esm2_image() -> str:
+def esm_image() -> str:
     """Ensure the tiny ESM2 image exists, building it if necessary."""
     present = (
         subprocess.run(["docker", "image", "inspect", IMAGE], capture_output=True).returncode == 0
@@ -54,10 +54,14 @@ def esm2_image() -> str:
                 "docker",
                 "build",
                 "--build-arg",
-                "ESM2_CHECKPOINT=esm2_t6_8M",
+                "ESM_HF_ID=facebook/esm2_t6_8M_UR50D",
+                "--build-arg",
+                "ESM_MODEL_NAME=esm2_t6_8M",
+                "--build-arg",
+                "ESM_MODEL_FAMILY=esm2",
                 "-t",
                 IMAGE,
-                str(REPO_ROOT / "containers" / "esm2"),
+                str(REPO_ROOT / "containers" / "esm"),
             ],
             check=True,
         )
@@ -65,7 +69,7 @@ def esm2_image() -> str:
 
 
 @pytest.fixture(scope="session")
-def model(esm2_image: str) -> protlms.Model:
+def model(esm_image: str) -> protlms.Model:
     return protlms.load("esm2-8m", allow_pull=False)
 
 

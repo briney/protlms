@@ -1,10 +1,11 @@
 #!/usr/bin/env python
-"""Contract-compliant entrypoint for the ESM2 model image.
+"""Contract-compliant entrypoint for the shared ESM model image.
 
-Implements the protlms container contract (see docs/CONTRACT.md) for the ESM2
-masked protein language model via HuggingFace ``transformers``. Exposes the
-``manifest``, ``embed``, ``likelihood``, and ``score`` subcommands plus a hidden
-``_prefetch`` used at build time to bake weights into the image.
+Implements the protlms container contract (see docs/CONTRACT.md) for the ESM
+family of masked protein language models (ESM-1b and ESM-2) via HuggingFace
+``transformers``. Exposes the ``manifest``, ``embed``, ``likelihood``, and
+``score`` subcommands plus a hidden ``_prefetch`` used at build time to bake
+weights into the image.
 
 This file is intentionally dependency-light at import time: ``torch`` and
 ``transformers`` are imported inside the functions that need them, so the pure
@@ -20,28 +21,18 @@ import re
 import sys
 from pathlib import Path
 
-CONTRACT_VERSION = "0.3"
+CONTRACT_VERSION = "0.4"
 MAX_SEQUENCE_LENGTH = 1024
 DEFAULT_BATCH_SIZE = 8
-DEFAULT_CHECKPOINT = os.environ.get("ESM2_CHECKPOINT", "esm2_t6_8M")
+HF_ID = os.environ.get("ESM_HF_ID", "facebook/esm2_t6_8M_UR50D")
+MODEL_NAME = os.environ.get("ESM_MODEL_NAME", "esm2_t6_8M")
+MODEL_FAMILY = os.environ.get("ESM_MODEL_FAMILY", "esm2")
 
 _ID_SAFE = re.compile(r"[^A-Za-z0-9._-]")
 _MUTANT_RE = re.compile(r"^([A-Za-z])(\d+)([A-Za-z])$")
 
 
 # --- pure helpers (unit-testable without torch) ----------------------------
-
-
-def resolve_hf_id(checkpoint: str) -> str:
-    """Resolve a short ESM2 checkpoint name to a HuggingFace model id.
-
-    ``esm2_t6_8M`` -> ``facebook/esm2_t6_8M_UR50D``. A value already containing
-    ``/`` is treated as a full HuggingFace id and returned unchanged.
-    """
-    if "/" in checkpoint:
-        return checkpoint
-    suffix = "" if checkpoint.endswith("_UR50D") else "_UR50D"
-    return f"facebook/{checkpoint}{suffix}"
 
 
 def sanitize_ids(ids: list[str]) -> list[str]:
@@ -151,7 +142,7 @@ def load_model(device: str):  # noqa: ANN201 - returns (tokenizer, model)
     import torch
     from transformers import AutoModelForMaskedLM, AutoTokenizer
 
-    hf_id = resolve_hf_id(DEFAULT_CHECKPOINT)
+    hf_id = HF_ID
     tokenizer = AutoTokenizer.from_pretrained(hf_id)
     model = AutoModelForMaskedLM.from_pretrained(hf_id, torch_dtype=torch.float32)
     model.eval().to(device)
@@ -162,13 +153,13 @@ def build_manifest() -> dict:
     """Build the manifest dict from the checkpoint's config."""
     from transformers import AutoConfig
 
-    config = AutoConfig.from_pretrained(resolve_hf_id(DEFAULT_CHECKPOINT))
+    config = AutoConfig.from_pretrained(HF_ID)
     return {
         "contract_version": CONTRACT_VERSION,
-        "name": DEFAULT_CHECKPOINT,
+        "name": MODEL_NAME,
         "version": "1.0.0",
-        "description": f"ESM2 masked protein language model ({DEFAULT_CHECKPOINT}).",
-        "model_family": "esm2",
+        "description": f"{MODEL_FAMILY} masked protein language model ({MODEL_NAME}).",
+        "model_family": MODEL_FAMILY,
         "capabilities": ["embed", "likelihood", "score"],
         "embedding_dim": int(config.hidden_size),
         "max_sequence_length": MAX_SEQUENCE_LENGTH,
@@ -306,7 +297,7 @@ def cmd_prefetch(_args: argparse.Namespace) -> None:
     """Bake weights into the image at build time (populate the HF cache)."""
     from transformers import AutoModelForMaskedLM, AutoTokenizer
 
-    hf_id = resolve_hf_id(DEFAULT_CHECKPOINT)
+    hf_id = HF_ID
     AutoTokenizer.from_pretrained(hf_id)
     AutoModelForMaskedLM.from_pretrained(hf_id)
     print(f"prefetched {hf_id}")
@@ -408,7 +399,7 @@ def cmd_score(args: argparse.Namespace) -> None:
         {
             "contract_version": CONTRACT_VERSION,
             "capability": "score",
-            "model_name": DEFAULT_CHECKPOINT,
+            "model_name": MODEL_NAME,
             "n_input_records": len(rows),
             "n_output_records": len(rows),
             "artifacts": artifacts,
@@ -445,7 +436,7 @@ def _write_capability_result(
         {
             "contract_version": CONTRACT_VERSION,
             "capability": capability,
-            "model_name": DEFAULT_CHECKPOINT,
+            "model_name": MODEL_NAME,
             "n_input_records": len(records),
             "n_output_records": len(records),
             "artifacts": artifacts,
@@ -456,7 +447,7 @@ def _write_capability_result(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="esm2", description="ESM2 protlms contract entrypoint.")
+    parser = argparse.ArgumentParser(prog="esm", description="ESM protlms contract entrypoint.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("manifest").set_defaults(func=cmd_manifest)

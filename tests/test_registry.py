@@ -13,7 +13,7 @@ from protlms.registry import BuildSpec, ModelEntry, Registry
 def test_default_registry_resolves_esm2_8m() -> None:
     registry = Registry.load()
     entry = registry.resolve("esm2-8m")
-    assert entry.image == "ghcr.io/briney/protlms-esm2:t6_8M"
+    assert entry.image == "ghcr.io/briney/protlms-esm:t6_8M"
     assert entry.model_family == "esm2"
 
 

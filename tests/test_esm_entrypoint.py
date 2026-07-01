@@ -1,4 +1,4 @@
-"""Unit tests for the ESM2 container entrypoint's pure helpers.
+"""Unit tests for the shared ESM container entrypoint's pure helpers.
 
 These exercise the dependency-light logic (no torch/transformers needed) by
 loading the standalone entrypoint module by path.
@@ -11,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-_ENTRYPOINT = Path(__file__).parents[1] / "containers" / "esm2" / "entrypoint.py"
+_ENTRYPOINT = Path(__file__).parents[1] / "containers" / "esm" / "entrypoint.py"
 
 
 def _load_entrypoint():
-    spec = importlib.util.spec_from_file_location("esm2_entrypoint", _ENTRYPOINT)
+    spec = importlib.util.spec_from_file_location("esm_entrypoint", _ENTRYPOINT)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -23,19 +23,6 @@ def _load_entrypoint():
 
 
 entrypoint = _load_entrypoint()
-
-
-@pytest.mark.parametrize(
-    ("checkpoint", "expected"),
-    [
-        ("esm2_t6_8M", "facebook/esm2_t6_8M_UR50D"),
-        ("esm2_t33_650M", "facebook/esm2_t33_650M_UR50D"),
-        ("esm2_t6_8M_UR50D", "facebook/esm2_t6_8M_UR50D"),
-        ("facebook/esm2_t6_8M_UR50D", "facebook/esm2_t6_8M_UR50D"),
-    ],
-)
-def test_resolve_hf_id(checkpoint: str, expected: str) -> None:
-    assert entrypoint.resolve_hf_id(checkpoint) == expected
 
 
 def test_sanitize_ids_replaces_unsafe_and_dedupes() -> None:
