@@ -131,3 +131,35 @@ def test_score_wt_marginal_runs(model: protlms.Model, tmp_path: Path) -> None:
 
 def test_manifest_now_declares_score(model: protlms.Model) -> None:
     assert "score" in {c.value for c in model.manifest.capabilities}
+
+
+def test_manifest_now_declares_contacts(model: protlms.Model) -> None:
+    assert "contacts" in {c.value for c in model.manifest.capabilities}
+
+
+def test_contacts_end_to_end_shapes(model: protlms.Model, tmp_path: Path) -> None:
+    result = model.contacts(TINY_FASTA, output_dir=tmp_path / "ct")
+    maps = result.maps()
+    assert set(maps) == EXPECTED_IDS
+    for cmap in maps.values():
+        n = cmap.shape[0]
+        assert cmap.shape == (n, n)
+        assert cmap.dtype == np.float32
+        assert np.isfinite(cmap).all()
+        assert np.allclose(cmap, cmap.T, atol=1e-4)  # symmetric
+
+
+def test_evaluate_contacts_casp14_target(model: protlms.Model, tmp_path: Path) -> None:
+    from protlms.eval.runner import evaluate_contacts, mean_precision
+
+    pdb_dir = tmp_path / "pdbs"
+    pdb_dir.mkdir()
+    src = REPO_ROOT / "tests" / "data" / "casp14" / "T1024.pdb"
+    (pdb_dir / "T1024.pdb").write_bytes(src.read_bytes())
+    results = evaluate_contacts(model, pdb_dir, max_length=400)
+    assert len(results) == 1
+    r = results[0]
+    assert r.target_id == "T1024"
+    assert 0.0 <= r.precision_at_l <= 1.0
+    # even the tiny 8M model beats a random baseline for long-range contacts
+    assert not math.isnan(mean_precision(results))
