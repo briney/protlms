@@ -128,6 +128,7 @@ Emitted as JSON on stdout by the `manifest` subcommand. Mirrors
 - `generate`: a FASTA file at `/in/prompts.fasta` where each record's sequence
   is treated as a prefix. An empty sequence triggers unconditional sampling.
 - `score`: a CSV at `/in/variants.csv` with the schema described below.
+- `contacts`: a FASTA file at `/in/seqs.fasta` (same as `embed`/`likelihood`).
 
 ### Outputs
 
@@ -324,5 +325,5 @@ raises with the raw stderr tail so the failure is still legible.
    supports.
 4. Register the image in [`src/protlms/_data/models.yaml`](../src/protlms/_data/models.yaml).
 
-The client does not change. See [`containers/esm2/`](../containers/esm2/) for a
+The client does not change. See [`containers/esm/`](../containers/esm/) for a
 reference implementation.

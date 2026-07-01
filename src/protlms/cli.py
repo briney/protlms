@@ -179,10 +179,11 @@ def score(
     ] = "masked-marginal",
     gpu: _GpuOpt = False,
     batch_size: _BatchOpt = None,
+    no_pull: _NoPullOpt = False,
 ) -> None:
     """Score sequence variants for effect."""
     try:
-        model_obj = load(model)
+        model_obj = load(model, allow_pull=False if no_pull else None)
         result = model_obj.score(
             variants, method=method, output_dir=output_dir, use_gpu=gpu, batch_size=batch_size
         )
