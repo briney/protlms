@@ -125,3 +125,24 @@ def test_resolve_e1() -> None:
         assert entry.image == f"ghcr.io/briney/protlms-e1:{tag}"
         assert entry.model_family == "e1"
         assert registry.resolve(alias) == entry
+
+
+def test_resolve_esm1b() -> None:
+    registry = Registry.load()
+    entry = registry.resolve("esm1b")
+    assert entry.model_family == "esm1b"
+    assert entry.image.startswith("ghcr.io/briney/protlms-esm:")
+    assert entry.build is not None
+    assert entry.build.context == "containers/esm"
+    assert entry.build.args["ESM_HF_ID"] == "facebook/esm1b_t33_650M_UR50S"
+
+
+def test_registry_includes_all_esm2_sizes() -> None:
+    names = {e.name for e in Registry.load().list_models()}
+    assert {"esm2-8m", "esm2-35m", "esm2-150m", "esm2-650m", "esm2-3b", "esm2-15b"} <= names
+
+
+def test_resolve_esm2_3b_uses_shared_context() -> None:
+    entry = Registry.load().resolve("esm2-3b")
+    assert entry.build.context == "containers/esm"
+    assert entry.build.args["ESM_MODEL_FAMILY"] == "esm2"
