@@ -68,3 +68,31 @@ def test_long_range_precision_at_l_no_eligible_pairs_is_nan() -> None:
     true = np.zeros((n, n), dtype=bool)
     resnums = np.arange(n)
     assert np.isnan(long_range_precision_at_l(pred, true, resnums, sep=24))
+
+
+def test_long_range_precision_at_l_default_top_is_residue_count_not_pair_count() -> None:
+    from protlms.eval.contacts import long_range_precision_at_l
+
+    n = 6
+    resnums = np.arange(n)  # sep=1 => all 15 upper-triangle pairs eligible
+    pred = np.zeros((n, n), dtype=float)
+    # top-6 pairs by score (descending): 3 true, 3 false among them
+    pred[0, 1] = 0.9  # true
+    pred[0, 2] = 0.8  # false
+    pred[0, 3] = 0.7  # true
+    pred[0, 4] = 0.6  # false
+    pred[0, 5] = 0.5  # true
+    pred[1, 2] = 0.4  # false
+    true = np.zeros((n, n), dtype=bool)
+    for a, b in [(0, 1), (0, 3), (0, 5), (1, 3), (2, 4), (3, 5)]:
+        true[a, b] = True  # 6 true total; the last 3 have pred 0 => ranked below the top-6
+    # default top must be L = N = 6, NOT the 15 eligible pairs.
+    # precision@6 = 3 true in the top-6 / 6 = 0.5 (would be 6/15 if it scored all eligible pairs).
+    assert long_range_precision_at_l(pred, true, resnums, sep=1) == 0.5
+
+
+def test_long_range_precision_at_l_shape_mismatch_raises() -> None:
+    from protlms.eval.contacts import long_range_precision_at_l
+
+    with pytest.raises(ValueError):
+        long_range_precision_at_l(np.zeros((4, 4)), np.zeros((4, 4), dtype=bool), np.arange(3))

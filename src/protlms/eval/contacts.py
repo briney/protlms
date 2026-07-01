@@ -165,6 +165,7 @@ def long_range_precision_at_l(
     if i.size == 0:
         return float("nan")
     order = np.argsort(-pred[i, j], kind="stable")
-    k = i.size if top is None else min(int(top), i.size)
+    k = n if top is None else int(top)
+    k = min(k, i.size)
     sel = order[:k]
     return float(true[i[sel], j[sel]].sum()) / float(k)
