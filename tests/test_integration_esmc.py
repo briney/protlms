@@ -33,6 +33,15 @@ def _docker_available() -> bool:
     return subprocess.run(["docker", "info"], capture_output=True).returncode == 0
 
 
+def _gpu_available() -> bool:
+    if shutil.which("nvidia-smi") is None:
+        return False
+    return subprocess.run(["nvidia-smi"], capture_output=True).returncode == 0
+
+
+requires_gpu = pytest.mark.skipif(not _gpu_available(), reason="requires a GPU")
+
+
 pytestmark = [
     pytest.mark.slow,
     pytest.mark.skipif(
@@ -72,8 +81,10 @@ def model(esmc_image: str) -> protlms.Model:
 def test_manifest_is_read_through_client(model: protlms.Model) -> None:
     assert model.manifest.name == "esmc_300m"
     assert model.manifest.embedding_dim == EMBEDDING_DIM
+    assert model.manifest.num_layers == 30
+    assert model.manifest.contract_version == "0.4"
     capabilities = {c.value for c in model.manifest.capabilities}
-    assert {"embed", "likelihood", "score"} <= capabilities
+    assert {"embed", "likelihood", "score", "contacts"} <= capabilities
 
 
 def test_embed_pooled_end_to_end(model: protlms.Model, tmp_path: Path) -> None:
@@ -113,3 +124,32 @@ def test_score_masked_marginal_end_to_end(model: protlms.Model, tmp_path: Path) 
     assert rows["self"]["n_mutations"] == 1
     assert rows["double"]["n_mutations"] == 2
     assert math.isfinite(float(rows["single"]["score"]))
+
+
+@requires_gpu
+def test_contacts_end_to_end_shapes(model: protlms.Model, tmp_path: Path) -> None:
+    result = model.contacts(TINY_FASTA, output_dir=tmp_path / "ct", use_gpu=True)
+    maps = result.maps()
+    assert set(maps) == EXPECTED_IDS
+    for cmap in maps.values():
+        n = cmap.shape[0]
+        assert cmap.shape == (n, n)
+        assert cmap.dtype == np.float32
+        assert np.isfinite(cmap).all()
+        assert np.allclose(cmap, cmap.T, atol=1e-4)  # symmetric
+
+
+@requires_gpu
+def test_evaluate_contacts_casp14_target(model: protlms.Model, tmp_path: Path) -> None:
+    from protlms.eval.runner import evaluate_contacts, mean_precision
+
+    pdb_dir = tmp_path / "pdbs"
+    pdb_dir.mkdir()
+    src = REPO_ROOT / "tests" / "data" / "casp14" / "T1024.pdb"
+    (pdb_dir / "T1024.pdb").write_bytes(src.read_bytes())
+    results = evaluate_contacts(model, pdb_dir, use_gpu=True, max_length=400)
+    assert len(results) == 1
+    r = results[0]
+    assert r.target_id == "T1024"
+    assert 0.0 <= r.precision_at_l <= 1.0
+    assert not math.isnan(mean_precision(results))

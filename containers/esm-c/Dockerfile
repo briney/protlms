@@ -25,12 +25,22 @@ ENV ESMC_CHECKPOINT=${ESMC_CHECKPOINT} \
     PYTHONUNBUFFERED=1
 
 # git + build tools for the git-based esm install; esm pulls torch + transformers (~4.57.x).
-RUN apt-get update && apt-get install -y --no-install-recommends git build-essential \
+# libnss-wrapper lets the runtime entrypoint shim /etc/passwd for arbitrary UIDs so that
+# torch._dynamo (imported transitively by transformers) can call getpass.getuser().
+RUN apt-get update && apt-get install -y --no-install-recommends git build-essential libnss-wrapper \
     && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir "esm @ git+https://github.com/Biohub/esm.git@${ESM_REF}"
 
+# esm pulls torch 2.12.1+cu130, whose CUDA 13 runtime the host driver 575 (CUDA 12.9)
+# cannot run; reinstall a CUDA-12.8 torch build (compatible with driver 575). esm only
+# requires torch>=2.2.0, so pinning the cu128 wheel is safe.
+RUN pip install --no-cache-dir --force-reinstall --no-deps torch \
+    --index-url https://download.pytorch.org/whl/cu128
+
 WORKDIR /app
 COPY entrypoint.py /app/entrypoint.py
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Bake the checkpoint's weights into the image (populates the HF cache layer).
 RUN python /app/entrypoint.py _prefetch
@@ -38,4 +48,4 @@ RUN python /app/entrypoint.py _prefetch
 # Enforce offline weights at runtime for reproducibility.
 ENV HF_HUB_OFFLINE=1
 
-ENTRYPOINT ["python", "/app/entrypoint.py"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

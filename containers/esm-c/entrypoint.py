@@ -282,7 +282,9 @@ def cmd_embed(args: argparse.Namespace) -> None:
                 "path": "embeddings.npz",
                 "kind": "pooled_embeddings",
                 "record_ids": ids,
-                "shape": [len(ids), model.config.hidden_size],
+                # ESMCConfig has no `hidden_size` attribute (it uses `d_model`); use the
+                # load-free architecture table instead of reading the model config.
+                "shape": [len(ids), _MODEL_INFO[DEFAULT_CHECKPOINT]["embedding_dim"]],
                 "dtype": "float32",
             }
         )
