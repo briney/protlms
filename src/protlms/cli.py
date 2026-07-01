@@ -189,6 +189,32 @@ def score(
 
 
 @app.command()
+def contacts(
+    model: _ModelArg,
+    fasta: _FastaArg,
+    output_dir: _OutputOpt,
+    method: Annotated[
+        str, typer.Option("--method", help="Contact method: categorical-jacobian.")
+    ] = "categorical-jacobian",
+    gpu: _GpuOpt = False,
+    batch_size: _BatchOpt = None,
+    no_pull: _NoPullOpt = False,
+) -> None:
+    """Predict residue-residue contact maps (categorical Jacobian)."""
+    try:
+        model_obj = load(model, allow_pull=False if no_pull else None)
+        result = model_obj.contacts(
+            fasta, method=method, output_dir=output_dir, use_gpu=gpu, batch_size=batch_size
+        )
+        console.print(
+            f"[green]contacts[/green] complete: {result.result.n_output_records} map(s) "
+            f"written to [bold]{output_dir}[/bold] method={method}"
+        )
+    except ProtlmsError as exc:
+        _fail(exc)
+
+
+@app.command()
 def generate(
     model: _ModelArg,
     prompts: Annotated[

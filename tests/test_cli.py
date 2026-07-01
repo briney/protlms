@@ -10,7 +10,13 @@ from typer.testing import CliRunner
 from protlms.cli import app
 from protlms.contract import Manifest, Result
 from protlms.exceptions import ModelNotFoundError
-from protlms.models import EmbeddingResult, GenerationResult, LikelihoodResult, ScoreResult
+from protlms.models import (
+    ContactsResult,
+    EmbeddingResult,
+    GenerationResult,
+    LikelihoodResult,
+    ScoreResult,
+)
 from protlms.registry import Registry
 
 runner = CliRunner()
@@ -75,6 +81,14 @@ class FakeModel:
         FakeModel.last_call = {"method": "score", "scoring_method": method, "use_gpu": use_gpu}
         return ScoreResult(
             result=_result("score", [{"path": "scores.csv", "kind": "variant_scores_csv"}]),
+            output_dir=Path(output_dir),
+            method=method,
+        )
+
+    def contacts(self, fasta, *, method, output_dir, use_gpu, batch_size):  # noqa: ANN001
+        FakeModel.last_call = {"method": "contacts", "contacts_method": method, "use_gpu": use_gpu}
+        return ContactsResult(
+            result=_result("contacts", [{"path": "contacts/seq1.npy", "kind": "contact_map"}]),
             output_dir=Path(output_dir),
             method=method,
         )
@@ -217,6 +231,14 @@ def test_score_command_default_method(variants_csv: Path, tmp_path: Path, monkey
     )
     assert result.exit_code == 0, result.stdout
     assert FakeModel.last_call["scoring_method"] == "masked-marginal"
+
+
+def test_contacts_command_invokes_model(fasta: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
+    result = runner.invoke(app, ["contacts", "esm2-8m", str(fasta), "-o", str(tmp_path / "out")])
+    assert result.exit_code == 0, result.stdout
+    assert FakeModel.last_call["method"] == "contacts"
+    assert FakeModel.last_call["contacts_method"] == "categorical-jacobian"
 
 
 def test_generate_command_invokes_model(prompts: Path, tmp_path: Path, monkeypatch) -> None:
