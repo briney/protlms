@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 _ENTRYPOINT = Path(__file__).parents[1] / "containers" / "esm-c" / "entrypoint.py"
@@ -60,21 +61,48 @@ def test_truncate_warns_and_clips() -> None:
     assert warnings and "truncated" in warnings[0]
 
 
-def test_build_manifest_300m(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(entrypoint, "DEFAULT_CHECKPOINT", "esmc_300m")
+@pytest.mark.parametrize(
+    ("checkpoint", "dim", "layers"),
+    [("esmc_300m", 960, 30), ("esmc_600m", 1152, 36), ("esmc_6b", 2560, 80)],
+)
+def test_build_manifest(
+    monkeypatch: pytest.MonkeyPatch, checkpoint: str, dim: int, layers: int
+) -> None:
+    monkeypatch.setattr(entrypoint, "DEFAULT_CHECKPOINT", checkpoint)
     m = entrypoint.build_manifest()
-    assert m["contract_version"] == "0.3"
+    assert m["name"] == checkpoint
     assert m["model_family"] == "esm-c"
-    assert m["name"] == "esmc_300m"
-    assert m["embedding_dim"] == 960
-    assert m["num_layers"] == 30
-    assert set(m["capabilities"]) == {"embed", "likelihood", "score"}
-    assert set(m["pooling_modes"]) == {"mean", "cls", "none"}
+    assert m["contract_version"] == "0.4"
+    assert m["embedding_dim"] == dim
+    assert m["num_layers"] == layers
+    assert m["capabilities"] == ["embed", "likelihood", "score", "contacts"]
+    assert m["max_sequence_length"] == 2048
 
 
-def test_build_manifest_600m(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(entrypoint, "DEFAULT_CHECKPOINT", "esmc_600m")
-    m = entrypoint.build_manifest()
-    assert m["embedding_dim"] == 1152
-    assert m["num_layers"] == 36
-    assert m["min_gpu_memory_gb"] == 4.0
+def test_jacobian_to_contacts_shape_symmetry_zero_diag() -> None:
+    rng = np.random.default_rng(0)
+    length = 7
+    contacts = entrypoint.jacobian_to_contacts(rng.standard_normal((length, 20, length, 20)))
+    assert contacts.shape == (length, length)
+    assert contacts.dtype == np.float32
+    assert np.allclose(contacts, contacts.T, atol=1e-5)
+    assert np.allclose(np.diag(contacts), 0.0)
+
+
+def test_aa_token_ids_maps_twenty_amino_acids() -> None:
+    class FakeTok:
+        def convert_tokens_to_ids(self, token: str) -> int:
+            return ord(token)
+
+    ids = entrypoint.aa_token_ids(FakeTok())
+    assert len(ids) == 20
+    assert ids[0] == ord("A")
+
+
+def test_parser_has_contacts_subcommand() -> None:
+    args = entrypoint.build_parser().parse_args(
+        ["contacts", "--input", "/in/seqs.fasta", "--output", "/out"]
+    )
+    assert args.command == "contacts"
+    assert args.method == "categorical-jacobian"
+    assert args.func is entrypoint.cmd_contacts
