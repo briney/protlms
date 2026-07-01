@@ -58,3 +58,40 @@ def test_parse_mutant_self_substitution() -> None:
 def test_parse_mutant_malformed_raises(bad: str) -> None:
     with pytest.raises(ValueError):
         entrypoint.parse_mutant(bad)
+
+
+def test_jacobian_to_contacts_shape_symmetry_zero_diag() -> None:
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+    length = 7
+    jac = rng.standard_normal((length, 20, length, 20))
+    contacts = entrypoint.jacobian_to_contacts(jac)
+    assert contacts.shape == (length, length)
+    assert contacts.dtype == np.float32
+    assert np.allclose(contacts, contacts.T, atol=1e-5)
+    assert np.allclose(np.diag(contacts), 0.0)
+
+
+def test_jacobian_to_contacts_invariant_to_aa_permutation() -> None:
+    import numpy as np
+
+    rng = np.random.default_rng(1)
+    length = 5
+    jac = rng.standard_normal((length, 20, length, 20))
+    perm = rng.permutation(20)
+    permuted = jac[:, perm][:, :, :, perm]
+    a = entrypoint.jacobian_to_contacts(jac)
+    b = entrypoint.jacobian_to_contacts(permuted)
+    assert np.allclose(a, b, atol=1e-4)
+
+
+def test_aa_token_ids_maps_twenty_amino_acids() -> None:
+    class FakeTok:
+        def convert_tokens_to_ids(self, token: str) -> int:
+            return ord(token)
+
+    ids = entrypoint.aa_token_ids(FakeTok())
+    assert len(ids) == 20
+    assert ids[0] == ord("A")
+    assert ids[-1] == ord("Y")

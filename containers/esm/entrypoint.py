@@ -102,6 +102,37 @@ def _valid_positions(group: list[dict], wt_seq: str) -> set[int]:
     return positions
 
 
+_AA_ORDER = "ACDEFGHIKLMNPQRSTVWY"  # 20 standard amino acids (fixed order)
+
+
+def aa_token_ids(tokenizer) -> list[int]:  # noqa: ANN001
+    """Token ids for the 20 standard amino acids, in a fixed order."""
+    return [tokenizer.convert_tokens_to_ids(aa) for aa in _AA_ORDER]
+
+
+def jacobian_to_contacts(jac):  # noqa: ANN001, ANN201
+    """Convert a categorical Jacobian ``(L,20,L,20)`` to an ``(L,L)`` contact map.
+
+    Faithful port of the Zhang/Ovchinnikov pipeline: center over all four axes,
+    symmetrize the 4-D tensor, Frobenius norm over the amino-acid axes, zero the
+    diagonal, apply average product correction (APC), symmetrize the ``(L,L)`` map.
+    """
+    import numpy as np
+
+    j = np.asarray(jac, dtype=np.float64)
+    for axis in range(4):
+        j = j - j.mean(axis=axis, keepdims=True)
+    j = (j + j.transpose(2, 3, 0, 1)) / 2.0
+    contacts = np.sqrt((j**2).sum(axis=(1, 3)))  # (L, L)
+    np.fill_diagonal(contacts, 0.0)
+    a1 = contacts.sum(axis=0, keepdims=True)
+    a2 = contacts.sum(axis=1, keepdims=True)
+    contacts = contacts - (a1 * a2) / contacts.sum()  # APC
+    np.fill_diagonal(contacts, 0.0)
+    contacts = (contacts + contacts.T) / 2.0
+    return contacts.astype(np.float32)
+
+
 # --- contract I/O ----------------------------------------------------------
 
 
