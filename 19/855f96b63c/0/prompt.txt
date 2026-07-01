@@ -1448,3 +1448,16 @@ tail -6 /tmp/claude-1001/-home-briney-git-protlms/bf2b7b10-35fa-4759-98a9-8aca3a
 docker build --build-arg ESMC_CHECKPOINT=esmc_300m -t ghcr.io/briney/protlms-esm-c:300m containers/esm-c &gt; /tmp/claude-1001/-home-briney-git-protlms/bf2b7b10-35fa-4759-98a9-8aca3a54d050/scratchpad/build4.log 2&gt;&amp;1
 echo "BUILD EXIT=$?"; tail -8 /tmp/claude-1001/-home-briney-git-protlms/bf2b7b10-35fa-4759-98a9-8aca3a54d050/scratchpad/build4.log" completed (exit code 0)</summary>
 </task-notification>
+
+---
+
+<task-notification>
+<task-id>byg03yixw</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1001/-home-briney-git-protlms/bf2b7b10-35fa-4759-98a9-8aca3a54d050/tasks/byg03yixw.output</output-file>
+<status>completed</status>
+<summary>Background command "cd /home/briney/git/protlms
+PROTLMS_RUN_DOCKER_TESTS=1 python -m pytest tests/test_integration_esmc.py -m slow -v &gt; /tmp/claude-1001/-home-briney-git-protlms/bf2b7b10-35fa-4759-98a9-8aca3a54d050/scratchpad/pytest_esmc_gpu.log 2&gt;&amp;1
+echo "PYTEST EXIT=$?"
+tail -25 /tmp/claude-1001/-home-briney-git-protlms/bf2b7b10-35fa-4759-98a9-8aca3a54d050/scratchpad/pytest_esmc_gpu.log" completed (exit code 0)</summary>
+</task-notification>
