@@ -95,3 +95,26 @@ def test_aa_token_ids_maps_twenty_amino_acids() -> None:
     assert len(ids) == 20
     assert ids[0] == ord("A")
     assert ids[-1] == ord("Y")
+
+
+def test_write_contacts_outputs_saves_npy_and_artifacts(tmp_path: Path) -> None:
+    import numpy as np
+
+    maps = {"seqA": np.zeros((4, 4), dtype=np.float32), "seqB": np.ones((3, 3), dtype=np.float32)}
+    artifacts = entrypoint.write_contacts_outputs(tmp_path, maps)
+    assert (tmp_path / "contacts" / "seqA.npy").is_file()
+    assert (tmp_path / "contacts" / "seqB.npy").is_file()
+    kinds = {a["kind"] for a in artifacts}
+    assert kinds == {"contact_map"}
+    by_id = {a["record_ids"][0]: a for a in artifacts}
+    assert by_id["seqA"]["shape"] == [4, 4]
+    assert by_id["seqA"]["path"] == "contacts/seqA.npy"
+
+
+def test_parser_has_contacts_subcommand() -> None:
+    args = entrypoint.build_parser().parse_args(
+        ["contacts", "--input", "/in/seqs.fasta", "--output", "/out"]
+    )
+    assert args.command == "contacts"
+    assert args.method == "categorical-jacobian"
+    assert args.func is entrypoint.cmd_contacts

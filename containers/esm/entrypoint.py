@@ -3,9 +3,9 @@
 
 Implements the protlms container contract (see docs/CONTRACT.md) for the ESM
 family of masked protein language models (ESM-1b and ESM-2) via HuggingFace
-``transformers``. Exposes the ``manifest``, ``embed``, ``likelihood``, and
-``score`` subcommands plus a hidden ``_prefetch`` used at build time to bake
-weights into the image.
+``transformers``. Exposes the ``manifest``, ``embed``, ``likelihood``,
+``score``, and ``contacts`` subcommands plus a hidden ``_prefetch`` used at
+build time to bake weights into the image.
 
 This file is intentionally dependency-light at import time: ``torch`` and
 ``transformers`` are imported inside the functions that need them, so the pure
@@ -191,7 +191,7 @@ def build_manifest() -> dict:
         "version": "1.0.0",
         "description": f"{MODEL_FAMILY} masked protein language model ({MODEL_NAME}).",
         "model_family": MODEL_FAMILY,
-        "capabilities": ["embed", "likelihood", "score"],
+        "capabilities": ["embed", "likelihood", "score", "contacts"],
         "embedding_dim": int(config.hidden_size),
         "max_sequence_length": MAX_SEQUENCE_LENGTH,
         "pooling_modes": ["mean", "cls", "none"],
@@ -440,6 +440,100 @@ def cmd_score(args: argparse.Namespace) -> None:
     )
 
 
+def write_contacts_outputs(output_dir, id_to_map):  # noqa: ANN001, ANN201
+    """Save each (L,L) contact map to contacts/<id>.npy; return artifact dicts."""
+    import numpy as np
+
+    contacts_dir = output_dir / "contacts"
+    contacts_dir.mkdir(parents=True, exist_ok=True)
+    artifacts = []
+    for clean_id, cmap in id_to_map.items():
+        arr = np.asarray(cmap, dtype=np.float32)
+        np.save(contacts_dir / f"{clean_id}.npy", arr)
+        artifacts.append(
+            {
+                "path": f"contacts/{clean_id}.npy",
+                "kind": "contact_map",
+                "record_ids": [clean_id],
+                "shape": list(arr.shape),
+                "dtype": "float32",
+            }
+        )
+    return artifacts
+
+
+def categorical_jacobian(model, tokenizer, seq, aa_ids, batch_size, device):  # noqa: ANN001, ANN201
+    """Compute the ``(L, 20, L, 20)`` categorical Jacobian for one sequence.
+
+    Feeds the unmasked sequence; for each residue position substitutes all 20
+    amino acids and reads the model logits at every residue position over the 20
+    amino-acid tokens, then subtracts the wild-type baseline.
+    """
+    import numpy as np
+    import torch
+
+    enc = tokenizer(seq, return_tensors="pt")
+    input_ids = enc["input_ids"][0]  # (T,)
+    special = tokenizer.get_special_tokens_mask(input_ids.tolist(), already_has_special_tokens=True)
+    residue_pos = [idx for idx, flag in enumerate(special) if flag == 0]  # (L,)
+    length = len(residue_pos)
+    aa = torch.tensor(aa_ids, dtype=input_ids.dtype)  # (20,)
+
+    def logits_at_residues(batch_ids):  # noqa: ANN001, ANN202
+        use_amp = device == "cuda"
+        with torch.no_grad(), torch.autocast(device_type="cuda", enabled=use_amp):
+            out = model(input_ids=batch_ids.to(device)).logits  # (B, T, V)
+        out = out.float()[:, residue_pos][..., aa]  # (B, L, 20)
+        return out.cpu().numpy()
+
+    baseline = logits_at_residues(input_ids.unsqueeze(0))[0]  # (L, 20)
+    jac = np.zeros((length, 20, length, 20), dtype=np.float32)
+    tiled = input_ids.repeat(20, 1)  # (20, T)
+    for n in range(length):
+        variant = tiled.clone()
+        variant[:, residue_pos[n]] = aa  # position n -> each of the 20 AAs
+        chunks = [
+            logits_at_residues(variant[start : start + batch_size])
+            for start in range(0, 20, batch_size)
+        ]
+        jac[n] = np.concatenate(chunks, axis=0)  # (20, L, 20)
+    jac -= baseline  # broadcast over (n, a); subtract WT logit at (j, b)
+    return jac
+
+
+def cmd_contacts(args: argparse.Namespace) -> None:
+    """Predict contact maps via the categorical Jacobian (one map per record)."""
+    device = pick_device(args.device)
+    tokenizer, model = load_model(device)
+    aa_ids = aa_token_ids(tokenizer)
+    batch_size = args.batch_size or 20
+    records = read_fasta(Path(args.input))
+    ids = sanitize_ids([rid for rid, _ in records])
+    output_dir = Path(args.output)
+    warnings: list[str] = []
+
+    id_to_map: dict[str, object] = {}
+    for clean_id, (rid, seq) in zip(ids, records, strict=True):
+        seq = _truncate(seq, warnings, rid)
+        jac = categorical_jacobian(model, tokenizer, seq, aa_ids, batch_size, device)
+        id_to_map[clean_id] = jacobian_to_contacts(jac)
+
+    artifacts = write_contacts_outputs(output_dir, id_to_map)
+    write_result(
+        output_dir,
+        {
+            "contract_version": CONTRACT_VERSION,
+            "capability": "contacts",
+            "model_name": MODEL_NAME,
+            "n_input_records": len(records),
+            "n_output_records": len(records),
+            "artifacts": artifacts,
+            "warnings": warnings,
+            "params": {"method": args.method, "device": args.device or "auto"},
+        },
+    )
+
+
 # --- shared result writer + arg parsing ------------------------------------
 
 
@@ -508,6 +602,16 @@ def build_parser() -> argparse.ArgumentParser:
     score.add_argument("--batch-size", type=int, default=None, dest="batch_size")
     score.add_argument("--device", default=None, choices=["cpu", "cuda", "auto"])
     score.set_defaults(func=cmd_score)
+
+    contacts = sub.add_parser("contacts")
+    contacts.add_argument("--input", required=True)
+    contacts.add_argument("--output", required=True)
+    contacts.add_argument(
+        "--method", default="categorical-jacobian", choices=["categorical-jacobian"]
+    )
+    contacts.add_argument("--batch-size", type=int, default=None, dest="batch_size")
+    contacts.add_argument("--device", default=None, choices=["cpu", "cuda", "auto"])
+    contacts.set_defaults(func=cmd_contacts)
 
     sub.add_parser("_prefetch").set_defaults(func=cmd_prefetch)
     return parser
