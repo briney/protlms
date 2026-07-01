@@ -4,18 +4,53 @@
 models:
   - name: esm2-8m
     aliases: [esm2_t6_8M]
-    image: ghcr.io/briney/protlms-esm2:t6_8M
+    image: ghcr.io/briney/protlms-esm:t6_8M
     model_family: esm2
     build:
-      context: containers/esm2
-      args: { ESM2_CHECKPOINT: esm2_t6_8M }
+      context: containers/esm
+      args: { ESM_HF_ID: facebook/esm2_t6_8M_UR50D, ESM_MODEL_NAME: esm2_t6_8M, ESM_MODEL_FAMILY: esm2 }
   - name: esm2-650m
     aliases: [esm2_t33_650M]
-    image: ghcr.io/briney/protlms-esm2:t33_650M
+    image: ghcr.io/briney/protlms-esm:t33_650M
     model_family: esm2
     build:
-      context: containers/esm2
-      args: { ESM2_CHECKPOINT: esm2_t33_650M }
+      context: containers/esm
+      args: { ESM_HF_ID: facebook/esm2_t33_650M_UR50D, ESM_MODEL_NAME: esm2_t33_650M, ESM_MODEL_FAMILY: esm2 }
+  - name: esm1b
+    aliases: [esm1b_t33_650M]
+    image: ghcr.io/briney/protlms-esm:esm1b_650M
+    model_family: esm1b
+    build:
+      context: containers/esm
+      args: { ESM_HF_ID: facebook/esm1b_t33_650M_UR50S, ESM_MODEL_NAME: esm1b_t33_650M, ESM_MODEL_FAMILY: esm1b }
+  - name: esm2-35m
+    aliases: [esm2_t12_35M]
+    image: ghcr.io/briney/protlms-esm:t12_35M
+    model_family: esm2
+    build:
+      context: containers/esm
+      args: { ESM_HF_ID: facebook/esm2_t12_35M_UR50D, ESM_MODEL_NAME: esm2_t12_35M, ESM_MODEL_FAMILY: esm2 }
+  - name: esm2-150m
+    aliases: [esm2_t30_150M]
+    image: ghcr.io/briney/protlms-esm:t30_150M
+    model_family: esm2
+    build:
+      context: containers/esm
+      args: { ESM_HF_ID: facebook/esm2_t30_150M_UR50D, ESM_MODEL_NAME: esm2_t30_150M, ESM_MODEL_FAMILY: esm2 }
+  - name: esm2-3b
+    aliases: [esm2_t36_3B]
+    image: ghcr.io/briney/protlms-esm:t36_3B
+    model_family: esm2
+    build:
+      context: containers/esm
+      args: { ESM_HF_ID: facebook/esm2_t36_3B_UR50D, ESM_MODEL_NAME: esm2_t36_3B, ESM_MODEL_FAMILY: esm2 }
+  - name: esm2-15b
+    aliases: [esm2_t48_15B]
+    image: ghcr.io/briney/protlms-esm:t48_15B
+    model_family: esm2
+    build:
+      context: containers/esm
+      args: { ESM_HF_ID: facebook/esm2_t48_15B_UR50D, ESM_MODEL_NAME: esm2_t48_15B, ESM_MODEL_FAMILY: esm2 }
   - name: progen2-small
     aliases: [progen2_small]
     image: ghcr.io/briney/protlms-progen2:small

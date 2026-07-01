@@ -39,8 +39,23 @@ def _manifest_dict() -> dict:
 
 
 def test_contract_version_is_semantic_string() -> None:
-    assert CONTRACT_VERSION == "0.3"
-    assert parse_contract_version(CONTRACT_VERSION) == (0, 3)
+    assert CONTRACT_VERSION == "0.4"
+    assert parse_contract_version(CONTRACT_VERSION) == (0, 4)
+
+
+def test_contacts_capability_and_artifact_kind_exist() -> None:
+    from protlms.contract import ArtifactKind
+
+    assert Capability.CONTACTS == "contacts"
+    assert ArtifactKind.CONTACT_MAP == "contact_map"
+
+
+def test_documented_contacts_result_example_validates() -> None:
+    """The contacts result example must parse as a Result."""
+    result = Result.model_validate_json((_DATA / "result.contacts.example.json").read_text())
+    assert result.capability is Capability.CONTACTS
+    assert result.artifacts[0].kind == "contact_map"
+    assert result.artifacts[0].shape is not None
 
 
 def test_manifest_round_trip() -> None:

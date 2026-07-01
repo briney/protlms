@@ -30,6 +30,7 @@ from protlms.exceptions import (
 )
 from protlms.io import (
     check_csv_has_columns,
+    load_contact_maps,
     load_per_residue_embeddings,
     load_pooled_embeddings,
     read_fasta,
@@ -111,6 +112,20 @@ class GenerationResult:
     def sequences(self) -> list[FastaRecord]:
         """Return the generated sequences (headers ``{prompt_id}__sample{k}``)."""
         return read_generated(self.output_dir, self.result)
+
+
+@dataclass
+class ContactsResult:
+    """Handle to the outputs of a ``contacts`` run (arrays loaded lazily)."""
+
+    result: Result
+    output_dir: Path
+    method: str
+    _keepalive: tempfile.TemporaryDirectory | None = field(default=None, repr=False)
+
+    def maps(self) -> dict[str, np.ndarray]:
+        """Return contact-score maps keyed by record id (shape ``(L, L)``)."""
+        return load_contact_maps(self.output_dir, self.result)
 
 
 class Model:
@@ -257,6 +272,47 @@ class Model:
             Capability.SCORE, stage_file(path, "variants.csv"), extra, output_dir, use_gpu
         )
         return ScoreResult(result=result, output_dir=out_dir, method=method, _keepalive=keep)
+
+    def contacts(
+        self,
+        fasta: str | Path,
+        *,
+        method: str = "categorical-jacobian",
+        output_dir: Path | None = None,
+        use_gpu: bool = False,
+        batch_size: int | None = None,
+    ) -> ContactsResult:
+        """Predict a residue-residue contact-score map per sequence.
+
+        Uses the categorical-Jacobian method: the container mutates each position
+        to all 20 amino acids, reads the model logits, and post-processes the
+        resulting ``(L, 20, L, 20)`` tensor into an ``(L, L)`` contact map.
+
+        Args:
+            fasta: Path to the input FASTA file (one map produced per record).
+            method: Contact-prediction method (only ``"categorical-jacobian"``).
+            output_dir: Where to write outputs; a temporary directory if ``None``.
+            use_gpu: Request all GPUs for the container run.
+            batch_size: Override the model's default batch size.
+
+        Raises:
+            CapabilityNotSupportedError: If the model does not support contacts.
+            InvalidRequestError: If ``method`` is invalid or the input is empty.
+            ContainerExecutionError: If the container run fails.
+        """
+        self._require_capability(Capability.CONTACTS)
+        if method != "categorical-jacobian":
+            raise InvalidRequestError(
+                f"unsupported contacts method {method!r}; choose 'categorical-jacobian'"
+            )
+        records = self._read_records(fasta)
+        extra = ["--method", method]
+        if batch_size is not None:
+            extra += ["--batch-size", str(batch_size)]
+        result, out_dir, keep = self._run(
+            Capability.CONTACTS, stage_inputs(records), extra, output_dir, use_gpu
+        )
+        return ContactsResult(result=result, output_dir=out_dir, method=method, _keepalive=keep)
 
     def generate(
         self,

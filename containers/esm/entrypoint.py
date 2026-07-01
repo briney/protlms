@@ -1,10 +1,11 @@
 #!/usr/bin/env python
-"""Contract-compliant entrypoint for the ESM2 model image.
+"""Contract-compliant entrypoint for the shared ESM model image.
 
-Implements the protlms container contract (see docs/CONTRACT.md) for the ESM2
-masked protein language model via HuggingFace ``transformers``. Exposes the
-``manifest``, ``embed``, ``likelihood``, and ``score`` subcommands plus a hidden
-``_prefetch`` used at build time to bake weights into the image.
+Implements the protlms container contract (see docs/CONTRACT.md) for the ESM
+family of masked protein language models (ESM-1b and ESM-2) via HuggingFace
+``transformers``. Exposes the ``manifest``, ``embed``, ``likelihood``,
+``score``, and ``contacts`` subcommands plus a hidden ``_prefetch`` used at
+build time to bake weights into the image.
 
 This file is intentionally dependency-light at import time: ``torch`` and
 ``transformers`` are imported inside the functions that need them, so the pure
@@ -20,28 +21,18 @@ import re
 import sys
 from pathlib import Path
 
-CONTRACT_VERSION = "0.3"
+CONTRACT_VERSION = "0.4"
 MAX_SEQUENCE_LENGTH = 1024
 DEFAULT_BATCH_SIZE = 8
-DEFAULT_CHECKPOINT = os.environ.get("ESM2_CHECKPOINT", "esm2_t6_8M")
+HF_ID = os.environ.get("ESM_HF_ID", "facebook/esm2_t6_8M_UR50D")
+MODEL_NAME = os.environ.get("ESM_MODEL_NAME", "esm2_t6_8M")
+MODEL_FAMILY = os.environ.get("ESM_MODEL_FAMILY", "esm2")
 
 _ID_SAFE = re.compile(r"[^A-Za-z0-9._-]")
 _MUTANT_RE = re.compile(r"^([A-Za-z])(\d+)([A-Za-z])$")
 
 
 # --- pure helpers (unit-testable without torch) ----------------------------
-
-
-def resolve_hf_id(checkpoint: str) -> str:
-    """Resolve a short ESM2 checkpoint name to a HuggingFace model id.
-
-    ``esm2_t6_8M`` -> ``facebook/esm2_t6_8M_UR50D``. A value already containing
-    ``/`` is treated as a full HuggingFace id and returned unchanged.
-    """
-    if "/" in checkpoint:
-        return checkpoint
-    suffix = "" if checkpoint.endswith("_UR50D") else "_UR50D"
-    return f"facebook/{checkpoint}{suffix}"
 
 
 def sanitize_ids(ids: list[str]) -> list[str]:
@@ -111,6 +102,37 @@ def _valid_positions(group: list[dict], wt_seq: str) -> set[int]:
     return positions
 
 
+_AA_ORDER = "ACDEFGHIKLMNPQRSTVWY"  # 20 standard amino acids (fixed order)
+
+
+def aa_token_ids(tokenizer) -> list[int]:  # noqa: ANN001
+    """Token ids for the 20 standard amino acids, in a fixed order."""
+    return [tokenizer.convert_tokens_to_ids(aa) for aa in _AA_ORDER]
+
+
+def jacobian_to_contacts(jac):  # noqa: ANN001, ANN201
+    """Convert a categorical Jacobian ``(L,20,L,20)`` to an ``(L,L)`` contact map.
+
+    Faithful port of the Zhang/Ovchinnikov pipeline: center over all four axes,
+    symmetrize the 4-D tensor, Frobenius norm over the amino-acid axes, zero the
+    diagonal, apply average product correction (APC), symmetrize the ``(L,L)`` map.
+    """
+    import numpy as np
+
+    j = np.asarray(jac, dtype=np.float64)
+    for axis in range(4):
+        j = j - j.mean(axis=axis, keepdims=True)
+    j = (j + j.transpose(2, 3, 0, 1)) / 2.0
+    contacts = np.sqrt((j**2).sum(axis=(1, 3)))  # (L, L)
+    np.fill_diagonal(contacts, 0.0)
+    a1 = contacts.sum(axis=0, keepdims=True)
+    a2 = contacts.sum(axis=1, keepdims=True)
+    contacts = contacts - (a1 * a2) / contacts.sum()  # APC
+    np.fill_diagonal(contacts, 0.0)
+    contacts = (contacts + contacts.T) / 2.0
+    return contacts.astype(np.float32)
+
+
 # --- contract I/O ----------------------------------------------------------
 
 
@@ -151,7 +173,7 @@ def load_model(device: str):  # noqa: ANN201 - returns (tokenizer, model)
     import torch
     from transformers import AutoModelForMaskedLM, AutoTokenizer
 
-    hf_id = resolve_hf_id(DEFAULT_CHECKPOINT)
+    hf_id = HF_ID
     tokenizer = AutoTokenizer.from_pretrained(hf_id)
     model = AutoModelForMaskedLM.from_pretrained(hf_id, torch_dtype=torch.float32)
     model.eval().to(device)
@@ -162,14 +184,14 @@ def build_manifest() -> dict:
     """Build the manifest dict from the checkpoint's config."""
     from transformers import AutoConfig
 
-    config = AutoConfig.from_pretrained(resolve_hf_id(DEFAULT_CHECKPOINT))
+    config = AutoConfig.from_pretrained(HF_ID)
     return {
         "contract_version": CONTRACT_VERSION,
-        "name": DEFAULT_CHECKPOINT,
+        "name": MODEL_NAME,
         "version": "1.0.0",
-        "description": f"ESM2 masked protein language model ({DEFAULT_CHECKPOINT}).",
-        "model_family": "esm2",
-        "capabilities": ["embed", "likelihood", "score"],
+        "description": f"{MODEL_FAMILY} masked protein language model ({MODEL_NAME}).",
+        "model_family": MODEL_FAMILY,
+        "capabilities": ["embed", "likelihood", "score", "contacts"],
         "embedding_dim": int(config.hidden_size),
         "max_sequence_length": MAX_SEQUENCE_LENGTH,
         "pooling_modes": ["mean", "cls", "none"],
@@ -306,7 +328,7 @@ def cmd_prefetch(_args: argparse.Namespace) -> None:
     """Bake weights into the image at build time (populate the HF cache)."""
     from transformers import AutoModelForMaskedLM, AutoTokenizer
 
-    hf_id = resolve_hf_id(DEFAULT_CHECKPOINT)
+    hf_id = HF_ID
     AutoTokenizer.from_pretrained(hf_id)
     AutoModelForMaskedLM.from_pretrained(hf_id)
     print(f"prefetched {hf_id}")
@@ -408,9 +430,103 @@ def cmd_score(args: argparse.Namespace) -> None:
         {
             "contract_version": CONTRACT_VERSION,
             "capability": "score",
-            "model_name": DEFAULT_CHECKPOINT,
+            "model_name": MODEL_NAME,
             "n_input_records": len(rows),
             "n_output_records": len(rows),
+            "artifacts": artifacts,
+            "warnings": warnings,
+            "params": {"method": args.method, "device": args.device or "auto"},
+        },
+    )
+
+
+def write_contacts_outputs(output_dir, id_to_map):  # noqa: ANN001, ANN201
+    """Save each (L,L) contact map to contacts/<id>.npy; return artifact dicts."""
+    import numpy as np
+
+    contacts_dir = output_dir / "contacts"
+    contacts_dir.mkdir(parents=True, exist_ok=True)
+    artifacts = []
+    for clean_id, cmap in id_to_map.items():
+        arr = np.asarray(cmap, dtype=np.float32)
+        np.save(contacts_dir / f"{clean_id}.npy", arr)
+        artifacts.append(
+            {
+                "path": f"contacts/{clean_id}.npy",
+                "kind": "contact_map",
+                "record_ids": [clean_id],
+                "shape": list(arr.shape),
+                "dtype": "float32",
+            }
+        )
+    return artifacts
+
+
+def categorical_jacobian(model, tokenizer, seq, aa_ids, batch_size, device):  # noqa: ANN001, ANN201
+    """Compute the ``(L, 20, L, 20)`` categorical Jacobian for one sequence.
+
+    Feeds the unmasked sequence; for each residue position substitutes all 20
+    amino acids and reads the model logits at every residue position over the 20
+    amino-acid tokens, then subtracts the wild-type baseline.
+    """
+    import numpy as np
+    import torch
+
+    enc = tokenizer(seq, return_tensors="pt")
+    input_ids = enc["input_ids"][0]  # (T,)
+    special = tokenizer.get_special_tokens_mask(input_ids.tolist(), already_has_special_tokens=True)
+    residue_pos = [idx for idx, flag in enumerate(special) if flag == 0]  # (L,)
+    length = len(residue_pos)
+    aa = torch.tensor(aa_ids, dtype=input_ids.dtype)  # (20,)
+
+    def logits_at_residues(batch_ids):  # noqa: ANN001, ANN202
+        use_amp = device == "cuda"
+        with torch.no_grad(), torch.autocast(device_type="cuda", enabled=use_amp):
+            out = model(input_ids=batch_ids.to(device)).logits  # (B, T, V)
+        out = out.float()[:, residue_pos][..., aa]  # (B, L, 20)
+        return out.cpu().numpy()
+
+    baseline = logits_at_residues(input_ids.unsqueeze(0))[0]  # (L, 20)
+    jac = np.zeros((length, 20, length, 20), dtype=np.float32)
+    tiled = input_ids.repeat(20, 1)  # (20, T)
+    for n in range(length):
+        variant = tiled.clone()
+        variant[:, residue_pos[n]] = aa  # position n -> each of the 20 AAs
+        chunks = [
+            logits_at_residues(variant[start : start + batch_size])
+            for start in range(0, 20, batch_size)
+        ]
+        jac[n] = np.concatenate(chunks, axis=0)  # (20, L, 20)
+    jac -= baseline  # broadcast over (n, a); subtract WT logit at (j, b)
+    return jac
+
+
+def cmd_contacts(args: argparse.Namespace) -> None:
+    """Predict contact maps via the categorical Jacobian (one map per record)."""
+    device = pick_device(args.device)
+    tokenizer, model = load_model(device)
+    aa_ids = aa_token_ids(tokenizer)
+    batch_size = args.batch_size or 20
+    records = read_fasta(Path(args.input))
+    ids = sanitize_ids([rid for rid, _ in records])
+    output_dir = Path(args.output)
+    warnings: list[str] = []
+
+    id_to_map: dict[str, object] = {}
+    for clean_id, (rid, seq) in zip(ids, records, strict=True):
+        seq = _truncate(seq, warnings, rid)
+        jac = categorical_jacobian(model, tokenizer, seq, aa_ids, batch_size, device)
+        id_to_map[clean_id] = jacobian_to_contacts(jac)
+
+    artifacts = write_contacts_outputs(output_dir, id_to_map)
+    write_result(
+        output_dir,
+        {
+            "contract_version": CONTRACT_VERSION,
+            "capability": "contacts",
+            "model_name": MODEL_NAME,
+            "n_input_records": len(records),
+            "n_output_records": len(records),
             "artifacts": artifacts,
             "warnings": warnings,
             "params": {"method": args.method, "device": args.device or "auto"},
@@ -445,7 +561,7 @@ def _write_capability_result(
         {
             "contract_version": CONTRACT_VERSION,
             "capability": capability,
-            "model_name": DEFAULT_CHECKPOINT,
+            "model_name": MODEL_NAME,
             "n_input_records": len(records),
             "n_output_records": len(records),
             "artifacts": artifacts,
@@ -456,7 +572,7 @@ def _write_capability_result(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="esm2", description="ESM2 protlms contract entrypoint.")
+    parser = argparse.ArgumentParser(prog="esm", description="ESM protlms contract entrypoint.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("manifest").set_defaults(func=cmd_manifest)
@@ -486,6 +602,16 @@ def build_parser() -> argparse.ArgumentParser:
     score.add_argument("--batch-size", type=int, default=None, dest="batch_size")
     score.add_argument("--device", default=None, choices=["cpu", "cuda", "auto"])
     score.set_defaults(func=cmd_score)
+
+    contacts = sub.add_parser("contacts")
+    contacts.add_argument("--input", required=True)
+    contacts.add_argument("--output", required=True)
+    contacts.add_argument(
+        "--method", default="categorical-jacobian", choices=["categorical-jacobian"]
+    )
+    contacts.add_argument("--batch-size", type=int, default=None, dest="batch_size")
+    contacts.add_argument("--device", default=None, choices=["cpu", "cuda", "auto"])
+    contacts.set_defaults(func=cmd_contacts)
 
     sub.add_parser("_prefetch").set_defaults(func=cmd_prefetch)
     return parser

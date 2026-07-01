@@ -1,6 +1,6 @@
 # The protlms Container Contract
 
-> **Contract version:** `0.3`
+> **Contract version:** `0.4`
 >
 > This document is the agreement between the `protlms` client and every model
 > image. It is the *only* thing the two sides share. Its schemas are mirrored
@@ -55,6 +55,9 @@ The image's `ENTRYPOINT` is the contract CLI. It MUST expose these subcommands:
 <entry> generate   --input /in/prompts.fasta --output /out
                    [--num-samples N] [--temperature T] [--top-p P] [--max-length L]
                    [--seed S] [--batch-size N] [--device cpu|cuda]
+
+<entry> contacts   --input /in/seqs.fasta --output /out
+                   [--method categorical-jacobian] [--batch-size N] [--device cpu|cuda]
 ```
 
 **Flag conventions**
@@ -86,7 +89,7 @@ Emitted as JSON on stdout by the `manifest` subcommand. Mirrors
 | `version` | string | Model/image semantic version. |
 | `description` | string | Human-readable summary. |
 | `model_family` | string | e.g. `esm2`. |
-| `capabilities` | string[] | Subset of `embed`, `likelihood`, `score`, `generate`. |
+| `capabilities` | string[] | Subset of `embed`, `likelihood`, `score`, `generate`, `contacts`. |
 | `embedding_dim` | int | Representation width. |
 | `max_sequence_length` | int | Longer inputs are truncated (recorded in `warnings`). |
 | `pooling_modes` | string[] | Subset of `mean`, `cls`, `none`. Empty if the model does not support `embed`. |
@@ -99,12 +102,12 @@ Emitted as JSON on stdout by the `manifest` subcommand. Mirrors
 
 ```json
 {
-  "contract_version": "0.3",
+  "contract_version": "0.4",
   "name": "esm2_t6_8M",
   "version": "1.0.0",
   "description": "ESM2 8M-parameter masked protein language model.",
   "model_family": "esm2",
-  "capabilities": ["embed", "likelihood", "score"],
+  "capabilities": ["embed", "likelihood", "score", "contacts"],
   "embedding_dim": 320,
   "max_sequence_length": 1024,
   "pooling_modes": ["mean", "cls", "none"],
@@ -125,6 +128,7 @@ Emitted as JSON on stdout by the `manifest` subcommand. Mirrors
 - `generate`: a FASTA file at `/in/prompts.fasta` where each record's sequence
   is treated as a prefix. An empty sequence triggers unconditional sampling.
 - `score`: a CSV at `/in/variants.csv` with the schema described below.
+- `contacts`: a FASTA file at `/in/seqs.fasta` (same as `embed`/`likelihood`).
 
 ### Outputs
 
@@ -139,6 +143,7 @@ than globbing the directory.
 | `likelihood` | `likelihoods.csv` (schema below). |
 | `score` | `scores.csv` (schema below). |
 | `generate` | `generated.fasta` — clean amino-acid sequences (control/special tokens stripped). Headers are `{prompt_id}__sample{k}` for k=0..num_samples-1. |
+| `contacts` | `contacts/<id>.npy` — one `(L, L)` float32 contact-score matrix per record. |
 
 **Record ids** are sanitized for use as filenames / npz keys: characters
 outside `[A-Za-z0-9._-]` become `_`, and collisions are de-duplicated with a
@@ -199,7 +204,7 @@ The success summary written to `/out/result.json`. Mirrors
 | Field | Type | Notes |
 |---|---|---|
 | `path` | string | Relative to `/out`. |
-| `kind` | string | `pooled_embeddings`, `per_residue_embeddings`, `likelihoods_csv`, `variant_scores_csv`, or `generated_fasta` (free string for forward compatibility). |
+| `kind` | string | `pooled_embeddings`, `per_residue_embeddings`, `likelihoods_csv`, `variant_scores_csv`, `generated_fasta`, or `contact_map` (free string for forward compatibility). |
 | `record_ids` | string[] \| null | Records contained in this artifact. |
 | `shape` | int[] \| null | Logical array shape, if applicable. |
 | `dtype` | string \| null | e.g. `float32`. |
@@ -266,6 +271,24 @@ The success summary written to `/out/result.json`. Mirrors
 }
 ```
 
+**Worked example (contacts)** ([`tests/data/result.contacts.example.json`](../tests/data/result.contacts.example.json)):
+
+```json
+{
+  "contract_version": "0.4",
+  "capability": "contacts",
+  "model_name": "esm2_t6_8M",
+  "n_input_records": 2,
+  "n_output_records": 2,
+  "artifacts": [
+    {"path": "contacts/gb1.npy", "kind": "contact_map", "record_ids": ["gb1"], "shape": [56, 56], "dtype": "float32"},
+    {"path": "contacts/insulin_b.npy", "kind": "contact_map", "record_ids": ["insulin_b"], "shape": [30, 30], "dtype": "float32"}
+  ],
+  "warnings": [],
+  "params": {"method": "categorical-jacobian", "device": "auto"}
+}
+```
+
 ---
 
 ## 6. Error contract
@@ -302,5 +325,5 @@ raises with the raw stderr tail so the failure is still legible.
    supports.
 4. Register the image in [`src/protlms/_data/models.yaml`](../src/protlms/_data/models.yaml).
 
-The client does not change. See [`containers/esm2/`](../containers/esm2/) for a
+The client does not change. See [`containers/esm/`](../containers/esm/) for a
 reference implementation.

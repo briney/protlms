@@ -10,7 +10,13 @@ from typer.testing import CliRunner
 from protlms.cli import app
 from protlms.contract import Manifest, Result
 from protlms.exceptions import ModelNotFoundError
-from protlms.models import EmbeddingResult, GenerationResult, LikelihoodResult, ScoreResult
+from protlms.models import (
+    ContactsResult,
+    EmbeddingResult,
+    GenerationResult,
+    LikelihoodResult,
+    ScoreResult,
+)
 from protlms.registry import Registry
 
 runner = CliRunner()
@@ -75,6 +81,14 @@ class FakeModel:
         FakeModel.last_call = {"method": "score", "scoring_method": method, "use_gpu": use_gpu}
         return ScoreResult(
             result=_result("score", [{"path": "scores.csv", "kind": "variant_scores_csv"}]),
+            output_dir=Path(output_dir),
+            method=method,
+        )
+
+    def contacts(self, fasta, *, method, output_dir, use_gpu, batch_size):  # noqa: ANN001
+        FakeModel.last_call = {"method": "contacts", "contacts_method": method, "use_gpu": use_gpu}
+        return ContactsResult(
+            result=_result("contacts", [{"path": "contacts/seq1.npy", "kind": "contact_map"}]),
             output_dir=Path(output_dir),
             method=method,
         )
@@ -219,6 +233,14 @@ def test_score_command_default_method(variants_csv: Path, tmp_path: Path, monkey
     assert FakeModel.last_call["scoring_method"] == "masked-marginal"
 
 
+def test_contacts_command_invokes_model(fasta: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
+    result = runner.invoke(app, ["contacts", "esm2-8m", str(fasta), "-o", str(tmp_path / "out")])
+    assert result.exit_code == 0, result.stdout
+    assert FakeModel.last_call["method"] == "contacts"
+    assert FakeModel.last_call["contacts_method"] == "categorical-jacobian"
+
+
 def test_generate_command_invokes_model(prompts: Path, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
     result = runner.invoke(
@@ -328,3 +350,22 @@ def test_embed_no_pull_threads_allow_pull_false(fasta: Path, tmp_path: Path, mon
     )
     assert result.exit_code == 0, result.output
     assert captured.get("allow_pull") is False
+
+
+def test_eval_contacts_command(tmp_path: Path, monkeypatch) -> None:
+    from protlms.eval.runner import TargetResult
+
+    monkeypatch.setattr("protlms.cli.load", lambda name, **kw: FakeModel())
+    monkeypatch.setattr(
+        "protlms.eval.runner.evaluate_contacts",
+        lambda *a, **k: [TargetResult("T1024", 80, 40, 0.625)],
+    )
+    pdb_dir = tmp_path / "pdbs"
+    pdb_dir.mkdir()
+    out_csv = tmp_path / "r.csv"
+    result = runner.invoke(
+        app, ["eval", "contacts", "esm2-8m", "--pdb-dir", str(pdb_dir), "--out", str(out_csv)]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert "T1024" in result.stdout
+    assert out_csv.exists()

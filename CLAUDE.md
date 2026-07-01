@@ -90,5 +90,7 @@ validates the request against the manifest, stages the FASTA into a temp `/in`
 
 `containers/<family>/` holds each model's build context (Dockerfile + entrypoint
 implementing the contract). It is versioned with the client but excluded from the
-wheel. `containers/esm2/` is the reference implementation (HuggingFace
-`transformers`; checkpoint chosen by the `ESM2_CHECKPOINT` build arg).
+wheel. `containers/esm/` is the reference implementation — a shared ESM
+masked-LM image serving both ESM-1b and ESM-2 (HuggingFace `transformers`;
+checkpoint, name, and family chosen by the `ESM_HF_ID`, `ESM_MODEL_NAME`, and
+`ESM_MODEL_FAMILY` build args). It now also supports the `contacts` capability.

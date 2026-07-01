@@ -1,4 +1,4 @@
-"""End-to-end test that chunked runs equal unchunked runs (real ESM2 image).
+"""End-to-end test that chunked runs equal unchunked runs (real ESM image).
 
 Gated: runs only when ``PROTLMS_RUN_DOCKER_TESTS=1`` and a working Docker daemon is
 available. Builds the tiny ``esm2_t6_8M`` image if absent.
@@ -17,7 +17,7 @@ import pytest
 
 import protlms
 
-IMAGE = "protlms-esm2:t6_8M"
+IMAGE = "ghcr.io/briney/protlms-esm:t6_8M"
 REPO_ROOT = Path(__file__).parents[1]
 TINY_FASTA = REPO_ROOT / "tests" / "data" / "tiny.fasta"
 
@@ -38,7 +38,7 @@ pytestmark = [
 
 
 @pytest.fixture(scope="session")
-def esm2_image() -> str:
+def esm_image() -> str:
     present = (
         subprocess.run(["docker", "image", "inspect", IMAGE], capture_output=True).returncode == 0
     )
@@ -48,10 +48,14 @@ def esm2_image() -> str:
                 "docker",
                 "build",
                 "--build-arg",
-                "ESM2_CHECKPOINT=esm2_t6_8M",
+                "ESM_HF_ID=facebook/esm2_t6_8M_UR50D",
+                "--build-arg",
+                "ESM_MODEL_NAME=esm2_t6_8M",
+                "--build-arg",
+                "ESM_MODEL_FAMILY=esm2",
                 "-t",
                 IMAGE,
-                str(REPO_ROOT / "containers" / "esm2"),
+                str(REPO_ROOT / "containers" / "esm"),
             ],
             check=True,
         )
@@ -59,8 +63,8 @@ def esm2_image() -> str:
 
 
 @pytest.fixture(scope="session")
-def model(esm2_image: str) -> protlms.Model:
-    return protlms.load("esm2-8m")
+def model(esm_image: str) -> protlms.Model:
+    return protlms.load("esm2-8m", allow_pull=False)
 
 
 def test_embed_chunked_equals_unchunked(model: protlms.Model, tmp_path: Path) -> None:

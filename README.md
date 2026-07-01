@@ -21,7 +21,9 @@ client:
 
 ```bash
 # build the demo image (weights baked in)
-docker build --build-arg ESM2_CHECKPOINT=esm2_t6_8M -t protlms-esm2:t6_8M containers/esm2
+docker build --build-arg ESM_HF_ID=facebook/esm2_t6_8M_UR50D \
+  --build-arg ESM_MODEL_NAME=esm2_t6_8M --build-arg ESM_MODEL_FAMILY=esm2 \
+  -t ghcr.io/briney/protlms-esm:t6_8M containers/esm
 
 protlms models list                                          # available models
 protlms embed      esm2-8m seqs.fasta -o out/ --pooling mean # pooled embeddings (.npz)
@@ -50,7 +52,7 @@ print(ll.rows())                  # per-sequence likelihood / perplexity
 | `src/protlms/runner.py` | Docker invocation behind a swappable `Runner` interface. |
 | `src/protlms/io.py` | FASTA parsing, input staging, output parsing. |
 | `src/protlms/models.py` | `protlms.load()` and the unified `Model` interface. |
-| `containers/esm2/` | Reference contract-compliant model image. |
+| `containers/esm/` | Reference contract-compliant model image. |
 | `docs/CONTRACT.md` | The container contract specification. |
 
 ## Development

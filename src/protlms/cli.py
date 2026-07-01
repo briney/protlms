@@ -26,6 +26,12 @@ models_app = typer.Typer(
 )
 app.add_typer(models_app, name="models")
 
+eval_app = typer.Typer(
+    help="Evaluate models on structural benchmarks.",
+    no_args_is_help=True,
+)
+app.add_typer(eval_app, name="eval")
+
 console = Console()
 
 # Reusable argument/option definitions (module-level to keep call sites tidy).
@@ -173,15 +179,42 @@ def score(
     ] = "masked-marginal",
     gpu: _GpuOpt = False,
     batch_size: _BatchOpt = None,
+    no_pull: _NoPullOpt = False,
 ) -> None:
     """Score sequence variants for effect."""
     try:
-        model_obj = load(model)
+        model_obj = load(model, allow_pull=False if no_pull else None)
         result = model_obj.score(
             variants, method=method, output_dir=output_dir, use_gpu=gpu, batch_size=batch_size
         )
         console.print(
             f"[green]score[/green] complete: {result.result.n_output_records} variant(s) "
+            f"written to [bold]{output_dir}[/bold] method={method}"
+        )
+    except ProtlmsError as exc:
+        _fail(exc)
+
+
+@app.command()
+def contacts(
+    model: _ModelArg,
+    fasta: _FastaArg,
+    output_dir: _OutputOpt,
+    method: Annotated[
+        str, typer.Option("--method", help="Contact method: categorical-jacobian.")
+    ] = "categorical-jacobian",
+    gpu: _GpuOpt = False,
+    batch_size: _BatchOpt = None,
+    no_pull: _NoPullOpt = False,
+) -> None:
+    """Predict residue-residue contact maps (categorical Jacobian)."""
+    try:
+        model_obj = load(model, allow_pull=False if no_pull else None)
+        result = model_obj.contacts(
+            fasta, method=method, output_dir=output_dir, use_gpu=gpu, batch_size=batch_size
+        )
+        console.print(
+            f"[green]contacts[/green] complete: {result.result.n_output_records} map(s) "
             f"written to [bold]{output_dir}[/bold] method={method}"
         )
     except ProtlmsError as exc:
@@ -236,6 +269,64 @@ def generate(
             f"[green]generate[/green] complete: {result.result.n_output_records} sequence(s) "
             f"written to [bold]{output_dir}[/bold]"
         )
+    except ProtlmsError as exc:
+        _fail(exc)
+
+
+@eval_app.command("contacts")
+def eval_contacts(
+    model: _ModelArg,
+    pdb_dir: Annotated[
+        Path,
+        typer.Option(
+            "--pdb-dir", exists=True, file_okay=False, help="Directory of .pdb structures."
+        ),
+    ],
+    out: Annotated[
+        Path | None, typer.Option("--out", help="Write per-target results to this CSV.")
+    ] = None,
+    sep: Annotated[int, typer.Option("--sep", help="Minimum |i-j| for long-range.")] = 24,
+    top: Annotated[
+        int | None, typer.Option("--top", help="Top-k pairs (default L = length).")
+    ] = None,
+    max_length: Annotated[
+        int | None, typer.Option("--max-length", help="Skip targets longer than this.")
+    ] = None,
+    gpu: _GpuOpt = False,
+    batch_size: _BatchOpt = None,
+    no_pull: _NoPullOpt = False,
+) -> None:
+    """Benchmark long-range precision@L on a directory of PDB structures."""
+    from protlms.eval.runner import evaluate_contacts, mean_precision, write_results_csv
+
+    try:
+        model_obj = load(model, allow_pull=False if no_pull else None)
+        results = evaluate_contacts(
+            model_obj,
+            pdb_dir,
+            sep=sep,
+            top=top,
+            use_gpu=gpu,
+            batch_size=batch_size,
+            max_length=max_length,
+        )
+        table = Table(title=f"contacts precision@L — {model_obj.manifest.name}")
+        table.add_column("target", style="bold")
+        table.add_column("L", justify="right")
+        table.add_column("LR contacts", justify="right")
+        table.add_column("P@L", justify="right")
+        for r in results:
+            table.add_row(
+                r.target_id, str(r.length), str(r.n_long_range_true), f"{r.precision_at_l:.3f}"
+            )
+        console.print(table)
+        console.print(
+            f"mean precision@L = [bold]{mean_precision(results):.4f}[/bold] "
+            f"over {len(results)} target(s)"
+        )
+        if out is not None:
+            write_results_csv(results, out)
+            console.print(f"wrote {out}")
     except ProtlmsError as exc:
         _fail(exc)
 

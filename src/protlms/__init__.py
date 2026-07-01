@@ -16,6 +16,7 @@ from protlms.exceptions import (
     RunnerError,
 )
 from protlms.models import (
+    ContactsResult,
     EmbeddingResult,
     GenerationResult,
     LikelihoodResult,
@@ -35,6 +36,7 @@ __all__ = [
     "LikelihoodResult",
     "ScoreResult",
     "GenerationResult",
+    "ContactsResult",
     "Registry",
     "ModelEntry",
     "Manifest",

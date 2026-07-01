@@ -1,4 +1,4 @@
-"""End-to-end integration test against a locally built ESM2 image.
+"""End-to-end integration test against a locally built shared ESM image.
 
 Gated: runs only when ``PROTLMS_RUN_DOCKER_TESTS=1`` and a working Docker daemon is
 available. Builds the tiny ``esm2_t6_8M`` image if it is not already present,
@@ -19,7 +19,7 @@ import pytest
 
 import protlms
 
-IMAGE = "ghcr.io/briney/protlms-esm2:t6_8M"
+IMAGE = "ghcr.io/briney/protlms-esm:t6_8M"
 EMBEDDING_DIM = 320
 REPO_ROOT = Path(__file__).parents[1]
 TINY_FASTA = REPO_ROOT / "tests" / "data" / "tiny.fasta"
@@ -43,7 +43,7 @@ pytestmark = [
 
 
 @pytest.fixture(scope="session")
-def esm2_image() -> str:
+def esm_image() -> str:
     """Ensure the tiny ESM2 image exists, building it if necessary."""
     present = (
         subprocess.run(["docker", "image", "inspect", IMAGE], capture_output=True).returncode == 0
@@ -54,10 +54,14 @@ def esm2_image() -> str:
                 "docker",
                 "build",
                 "--build-arg",
-                "ESM2_CHECKPOINT=esm2_t6_8M",
+                "ESM_HF_ID=facebook/esm2_t6_8M_UR50D",
+                "--build-arg",
+                "ESM_MODEL_NAME=esm2_t6_8M",
+                "--build-arg",
+                "ESM_MODEL_FAMILY=esm2",
                 "-t",
                 IMAGE,
-                str(REPO_ROOT / "containers" / "esm2"),
+                str(REPO_ROOT / "containers" / "esm"),
             ],
             check=True,
         )
@@ -65,7 +69,7 @@ def esm2_image() -> str:
 
 
 @pytest.fixture(scope="session")
-def model(esm2_image: str) -> protlms.Model:
+def model(esm_image: str) -> protlms.Model:
     return protlms.load("esm2-8m", allow_pull=False)
 
 
@@ -127,3 +131,35 @@ def test_score_wt_marginal_runs(model: protlms.Model, tmp_path: Path) -> None:
 
 def test_manifest_now_declares_score(model: protlms.Model) -> None:
     assert "score" in {c.value for c in model.manifest.capabilities}
+
+
+def test_manifest_now_declares_contacts(model: protlms.Model) -> None:
+    assert "contacts" in {c.value for c in model.manifest.capabilities}
+
+
+def test_contacts_end_to_end_shapes(model: protlms.Model, tmp_path: Path) -> None:
+    result = model.contacts(TINY_FASTA, output_dir=tmp_path / "ct")
+    maps = result.maps()
+    assert set(maps) == EXPECTED_IDS
+    for cmap in maps.values():
+        n = cmap.shape[0]
+        assert cmap.shape == (n, n)
+        assert cmap.dtype == np.float32
+        assert np.isfinite(cmap).all()
+        assert np.allclose(cmap, cmap.T, atol=1e-4)  # symmetric
+
+
+def test_evaluate_contacts_casp14_target(model: protlms.Model, tmp_path: Path) -> None:
+    from protlms.eval.runner import evaluate_contacts, mean_precision
+
+    pdb_dir = tmp_path / "pdbs"
+    pdb_dir.mkdir()
+    src = REPO_ROOT / "tests" / "data" / "casp14" / "T1024.pdb"
+    (pdb_dir / "T1024.pdb").write_bytes(src.read_bytes())
+    results = evaluate_contacts(model, pdb_dir, max_length=400)
+    assert len(results) == 1
+    r = results[0]
+    assert r.target_id == "T1024"
+    assert 0.0 <= r.precision_at_l <= 1.0
+    # even the tiny 8M model beats a random baseline for long-range contacts
+    assert not math.isnan(mean_precision(results))
