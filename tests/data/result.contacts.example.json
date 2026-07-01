@@ -1,0 +1,13 @@
+{
+  "contract_version": "0.4",
+  "capability": "contacts",
+  "model_name": "esm2_t6_8M",
+  "n_input_records": 2,
+  "n_output_records": 2,
+  "artifacts": [
+    {"path": "contacts/gb1.npy", "kind": "contact_map", "record_ids": ["gb1"], "shape": [56, 56], "dtype": "float32"},
+    {"path": "contacts/insulin_b.npy", "kind": "contact_map", "record_ids": ["insulin_b"], "shape": [30, 30], "dtype": "float32"}
+  ],
+  "warnings": [],
+  "params": {"method": "categorical-jacobian", "device": "auto"}
+}

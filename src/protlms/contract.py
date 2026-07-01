@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict
 from protlms.exceptions import ContractVersionError
 
 #: The contract version this client speaks (``MAJOR.MINOR``).
-CONTRACT_VERSION = "0.3"
+CONTRACT_VERSION = "0.4"
 
 
 class Capability(StrEnum):
@@ -25,6 +25,7 @@ class Capability(StrEnum):
     LIKELIHOOD = "likelihood"
     SCORE = "score"  # implemented in contract 0.2
     GENERATE = "generate"  # implemented in contract 0.3
+    CONTACTS = "contacts"  # implemented in contract 0.4
 
 
 class PoolingMode(StrEnum):
@@ -44,6 +45,7 @@ class ArtifactKind(StrEnum):
     LIKELIHOODS_CSV = "likelihoods_csv"
     VARIANT_SCORES_CSV = "variant_scores_csv"
     GENERATED_FASTA = "generated_fasta"
+    CONTACT_MAP = "contact_map"
 
 
 class Manifest(BaseModel):
