@@ -24,18 +24,19 @@ ENV ESMC_CHECKPOINT=${ESMC_CHECKPOINT} \
     HF_HOME=/opt/hf-cache \
     PYTHONUNBUFFERED=1
 
-# git + build tools for the git-based esm install; esm pulls torch + transformers (~4.57.x).
+# git + build tools for the git-based esm install; esm pulls transformers (~4.57.x).
 # libnss-wrapper lets the runtime entrypoint shim /etc/passwd for arbitrary UIDs so that
 # torch._dynamo (imported transitively by transformers) can call getpass.getuser().
 RUN apt-get update && apt-get install -y --no-install-recommends git build-essential libnss-wrapper \
     && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir "esm @ git+https://github.com/Biohub/esm.git@${ESM_REF}"
 
-# esm pulls torch 2.12.1+cu130, whose CUDA 13 runtime the host driver 575 (CUDA 12.9)
-# cannot run; reinstall a CUDA-12.8 torch build (compatible with driver 575). esm only
-# requires torch>=2.2.0, so pinning the cu128 wheel is safe.
-RUN pip install --no-cache-dir --force-reinstall --no-deps torch \
-    --index-url https://download.pytorch.org/whl/cu128
+# Install a CUDA-12.8 torch build FIRST (with its cu12 runtime libs). esm would otherwise
+# pull torch 2.x+cu130, whose CUDA-13 runtime the host driver 575 (CUDA 12.9) cannot run.
+# esm only requires torch>=2.2.0, so installing cu128 first satisfies it and prevents the
+# cu130 wheel (installing torch here brings the matching nvidia-*-cu12 libs; do NOT use
+# --no-deps or torch cannot find libcublasLt.so.12).
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu128
+RUN pip install --no-cache-dir "esm @ git+https://github.com/Biohub/esm.git@${ESM_REF}"
 
 WORKDIR /app
 COPY entrypoint.py /app/entrypoint.py
