@@ -126,3 +126,45 @@ def true_contact_map(
     contacts = dist < threshold
     np.fill_diagonal(contacts, False)
     return contacts
+
+
+def long_range_precision_at_l(
+    pred: np.ndarray,
+    true: np.ndarray,
+    resnums: np.ndarray,
+    *,
+    sep: int = LONG_RANGE_SEP,
+    top: int | None = None,
+) -> float:
+    """Long-range contact precision@L.
+
+    Ranks eligible upper-triangle residue pairs (``|resnum_i − resnum_j| ≥ sep``)
+    by ``pred`` and returns the fraction of the top ``top`` that are true contacts.
+
+    Args:
+        pred: ``(N, N)`` predicted contact scores (higher = more likely contact).
+        true: ``(N, N)`` boolean ground-truth contact map.
+        resnums: ``(N,)`` residue numbers (used for the separation filter).
+        sep: Minimum sequence separation for a long-range pair.
+        top: Number of top pairs to score; ``N`` (= L) if ``None``.
+
+    Returns:
+        Precision in ``[0, 1]``, or ``nan`` if no eligible pairs exist.
+    """
+    pred = np.asarray(pred, dtype=float)
+    true = np.asarray(true, dtype=bool)
+    resnums = np.asarray(resnums, dtype=int)
+    n = pred.shape[0]
+    if pred.shape != (n, n) or true.shape != (n, n) or resnums.shape != (n,):
+        raise ValueError(
+            f"shape mismatch: pred={pred.shape}, true={true.shape}, resnums={resnums.shape}"
+        )
+    i, j = np.triu_indices(n, k=1)
+    eligible = np.abs(resnums[i] - resnums[j]) >= sep
+    i, j = i[eligible], j[eligible]
+    if i.size == 0:
+        return float("nan")
+    order = np.argsort(-pred[i, j], kind="stable")
+    k = i.size if top is None else min(int(top), i.size)
+    sel = order[:k]
+    return float(true[i[sel], j[sel]].sum()) / float(k)
