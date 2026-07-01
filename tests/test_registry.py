@@ -69,6 +69,20 @@ def test_resolve_esm_c() -> None:
     assert registry.resolve("esmc_600m") == e600
 
 
+def test_resolve_esm_c_6b() -> None:
+    entry = Registry.load().resolve("esm-c-6b")
+    assert entry.image == "ghcr.io/briney/protlms-esm-c:6b"
+    assert entry.model_family == "esm-c"
+    assert entry.build.context == "containers/esm-c"
+    assert entry.build.args["ESMC_CHECKPOINT"] == "esmc_6b"
+    assert Registry.load().resolve("esmc_6b") == entry
+
+
+def test_registry_includes_all_esm_c_sizes() -> None:
+    names = {e.name for e in Registry.load().list_models()}
+    assert {"esm-c-300m", "esm-c-600m", "esm-c-6b"} <= names
+
+
 def _entry(**overrides: object) -> ModelEntry:
     data = dict(name="m", image="ghcr.io/briney/protlms-esm2:t6_8M", model_family="esm2")
     data.update(overrides)
